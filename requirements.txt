@@ -1,0 +1,58 @@
+# JEE Dropout Prediction System — Python dependencies
+# Install: pip install -r requirements.txt
+#
+# Pinning notes
+# -------------
+#   bcrypt<4.0  — passlib 1.7.4 is incompatible with bcrypt ≥ 4.0
+#   sqlalchemy[asyncio] — pulls in greenlet (required for async ORM)
+
+# ── Web framework ─────────────────────────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9     # multipart/form-data support
+aiofiles==23.2.1            # async file serving
+
+# ── Database — async (production) ─────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.29
+asyncpg==0.29.0             # PostgreSQL async driver
+aiosqlite==0.20.0           # SQLite async driver (dev / CI)
+
+# ── Database — sync (Alembic / seeds / tests) ─────────────────────────────────
+alembic==1.13.1
+psycopg2-binary==2.9.9      # PostgreSQL sync driver
+# aiosqlite covers SQLite sync automatically via SQLAlchemy
+
+# ── Pydantic ──────────────────────────────────────────────────────────────────
+pydantic==2.7.1
+pydantic-settings==2.2.1
+email-validator==2.1.1      # EmailStr validation
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt>=3.2,<4.0            # pinned — passlib 1.7.4 incompatible with bcrypt ≥ 4.0
+
+# ── ML / Data science ─────────────────────────────────────────────────────────
+numpy==1.26.4
+pandas==2.2.1
+scikit-learn==1.4.2
+xgboost==2.0.3
+shap==0.45.0
+scipy==1.13.0
+matplotlib==3.8.4
+joblib==1.4.0
+
+# ── Reporting / Export ────────────────────────────────────────────────────────
+openpyxl==3.1.2             # Excel export
+fpdf2==2.7.9                # PDF report generation
+
+# ── Scheduling ────────────────────────────────────────────────────────────────
+apscheduler==3.10.4         # background task scheduler (daily re-prediction)
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+slowapi==0.1.9              # FastAPI rate limiter (wraps limits)
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==8.1.1
+pytest-asyncio==0.23.6
+httpx==0.27.0               # async HTTP client used by FastAPI TestClient

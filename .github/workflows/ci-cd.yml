@@ -1,0 +1,229 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .github/workflows/ci-cd.yml
+# CI/CD pipeline for JEE Dropout Prediction System
+#
+# Jobs
+# ────
+#   test    — runs on every PR and push to main
+#   build   — builds + pushes Docker images to GHCR (main only, after test)
+#   deploy  — SSH deploy to VPS (main only, after build, if DEPLOY secret=true)
+#
+# Required GitHub Secrets
+# ───────────────────────
+#   CODECOV_TOKEN          — Codecov upload token
+#   VPS_HOST               — e.g. 123.456.789.0
+#   VPS_USER               — e.g. ubuntu
+#   VPS_SSH_KEY            — contents of ~/.ssh/id_rsa (private key)
+#   VPS_DEPLOY_PATH        — absolute path on VPS, e.g. /opt/jee-dropout
+#   DEPLOY                 — set to "true" to enable auto-deploy
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI / CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch (saves CI minutes)
+concurrency:
+  group:  ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY:   ghcr.io
+  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/jee-dropout
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 1 — Test
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  test:
+    name: 🧪 Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Python setup ────────────────────────────────────────────────────────
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # ── Install dependencies ─────────────────────────────────────────────────
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov
+
+      # ── Lint (optional but good practice) ───────────────────────────────────
+      - name: Lint with Ruff
+        run: |
+          pip install ruff
+          ruff check backend/ --ignore E501 || true   # warn only, don't block
+
+      # ── Run tests with coverage ──────────────────────────────────────────────
+      - name: Run pytest
+        env:
+          DATABASE_URL:  sqlite:///./test_jee.db
+          SECRET_KEY:    ci-test-secret-key-not-for-production
+          MODEL_DIR:     models
+          ENVIRONMENT:   development
+        run: |
+          python -m pytest tests/ \
+            --cov=backend/app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -v
+
+      # ── Upload coverage to Codecov ───────────────────────────────────────────
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file:  ./coverage.xml
+          flags: backend
+          name:  backend-coverage
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 2 — Build & push Docker images
+# ─────────────────────────────────────────────────────────────────────────────
+  build:
+    name: 🐳 Build & Push Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write   # required to push to GHCR
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Login to GitHub Container Registry ───────────────────────────────────
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Set up Docker Buildx (multi-platform + cache support) ────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Extract metadata (tags + labels) ─────────────────────────────────────
+      - name: Extract backend metadata
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE }}-backend
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Extract frontend metadata
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE }}-frontend
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      # ── Build and push backend ────────────────────────────────────────────────
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context:     ./backend
+          file:        ./backend/Dockerfile
+          target:      runtime
+          push:        true
+          tags:        ${{ steps.meta-backend.outputs.tags }}
+          labels:      ${{ steps.meta-backend.outputs.labels }}
+          cache-from:  type=gha
+          cache-to:    type=gha,mode=max
+
+      # ── Build and push frontend ───────────────────────────────────────────────
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context:     ./frontend
+          file:        ./frontend/Dockerfile
+          push:        true
+          tags:        ${{ steps.meta-frontend.outputs.tags }}
+          labels:      ${{ steps.meta-frontend.outputs.labels }}
+          cache-from:  type=gha
+          cache-to:    type=gha,mode=max
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 3 — Deploy to VPS
+# ─────────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      secrets.DEPLOY == 'true'
+
+    environment:
+      name: production
+      url:  http://${{ secrets.VPS_HOST }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── SSH deploy ────────────────────────────────────────────────────────────
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:    ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key:     ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+
+            echo "=== Deploying JEE Dropout Prediction System ==="
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+
+            # Pull latest images from GHCR
+            docker compose pull
+
+            # Bring up new containers (zero-downtime: Compose replaces one at a time)
+            docker compose up -d --remove-orphans
+
+            # Wait for backend health check
+            echo "=== Waiting for backend health check ==="
+            for i in $(seq 1 12); do
+              if curl -sf http://localhost/health; then
+                echo "=== Backend is healthy! ==="
+                break
+              fi
+              echo "Attempt $i/12 — waiting 10s..."
+              sleep 10
+            done
+
+            # Prune old images to save disk space
+            docker image prune -f
+
+            echo "=== Deployment complete ==="

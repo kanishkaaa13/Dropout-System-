@@ -1,0 +1,64 @@
+{
+  "version": "2.0.0",
+  "dataset": "JEE_Dropout_After_Class_12.csv",
+  "n_samples": 5000,
+  "n_train": 3000,
+  "dropout_rate": 0.2072,
+  "threshold": 0.3,
+  "numeric_features": [
+    "jee_main_score",
+    "jee_advanced_score",
+    "mock_test_score_avg",
+    "class_12_percent",
+    "attempt_count",
+    "daily_study_hours"
+  ],
+  "categorical_features": [
+    "school_board",
+    "coaching_institute",
+    "family_income",
+    "parent_education",
+    "location_type",
+    "peer_pressure_level",
+    "mental_health_issues",
+    "admission_taken"
+  ],
+  "feature_cols": [
+    "jee_main_score",
+    "jee_advanced_score",
+    "mock_test_score_avg",
+    "class_12_percent",
+    "attempt_count",
+    "daily_study_hours",
+    "school_board",
+    "coaching_institute",
+    "family_income",
+    "parent_education",
+    "location_type",
+    "peer_pressure_level",
+    "mental_health_issues",
+    "admission_taken"
+  ],
+  "weights": {
+    "XGBoost": 0.55,
+    "RandomForest": 0.35,
+    "LogisticRegression": 0.1
+  },
+  "test_metrics": {
+    "xgboost": {
+      "auc": 0.9999756321923107
+    },
+    "random_forest": {
+      "auc": 0.9995979311731272
+    },
+    "logistic_regression": {
+      "auc": 0.793696048150788
+    },
+    "ensemble": {
+      "auc": 0.9990557474520412,
+      "f1": 0.9951456310679612,
+      "precision": 1.0,
+      "recall": 0.9903381642512077
+    }
+  }
+}

@@ -1,0 +1,10 @@
+"""
+migrations/versions/.gitkeep
+─────────────────────────────
+This directory stores Alembic migration version files.
+
+Generate your first migration after setting up the database:
+
+    alembic revision --autogenerate -m "initial_schema"
+    alembic upgrade head
+"""

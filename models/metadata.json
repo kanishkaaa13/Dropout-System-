@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "trained_at": "2026-05-22T12:28:16",
+  "n_features": 17,
+  "feature_names": [
+    "attendance_rate",
+    "mock_test_avg",
+    "physics_score",
+    "chemistry_score",
+    "maths_score",
+    "mock_score_trend",
+    "assignment_completion_rate",
+    "dpp_accuracy",
+    "test_attempt_rate",
+    "burnout_score",
+    "stress_level",
+    "sleep_hours_avg",
+    "study_hours_per_day",
+    "study_consistency_score",
+    "parental_pressure_level",
+    "peer_comparison_stress",
+    "coaching_engagement_score"
+  ],
+  "threshold": 0.35,
+  "train_size": 4800,
+  "test_size": 1600,
+  "ensemble_auc": 0.9916,
+  "ensemble_weights": {
+    "xgboost": 0.55,
+    "random_forest": 0.35,
+    "logistic_regression": 0.1
+  },
+  "models": {
+    "xgboost": "xgb_model.pkl",
+    "random_forest": "rf_model.pkl",
+    "logistic_regression": "lr_model.pkl",
+    "preprocessor": "preprocessor.pkl"
+  }
+}

@@ -1,0 +1,263 @@
+"""
+backend/app/services/email_service.py
+──────────────────────────────────────
+Lightweight email service using stdlib smtplib + email.mime only.
+No heavy dependencies. Fails gracefully when SMTP is not configured.
+"""
+
+from __future__ import annotations
+
+import logging
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text      import MIMEText
+from typing               import Optional
+
+from backend.app.config import settings
+
+log = logging.getLogger(__name__)
+
+# ── SMTP availability check ───────────────────────────────────────────────────
+
+def _smtp_configured() -> bool:
+    return bool(
+        getattr(settings, "SMTP_HOST", None)
+        and getattr(settings, "SMTP_USER", None)
+        and getattr(settings, "SMTP_PASSWORD", None)
+    )
+
+
+def _send(to: str, subject: str, html_body: str) -> bool:
+    """
+    Low-level send helper.  Returns True on success, False (never raises) on failure.
+    """
+    if not _smtp_configured():
+        log.info("SMTP not configured — email skipped (to=%s, subject=%s)", to, subject)
+        return False
+
+    host     = settings.SMTP_HOST
+    port     = int(getattr(settings, "SMTP_PORT", 587))
+    user     = settings.SMTP_USER
+    password = settings.SMTP_PASSWORD
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = f"JEE Predictor <{user}>"
+    msg["To"]      = to
+    msg.attach(MIMEText(html_body, "html"))
+
+    try:
+        with smtplib.SMTP(host, port, timeout=10) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(user, password)
+            smtp.sendmail(user, to, msg.as_string())
+        log.info("Email sent to %s — %s", to, subject)
+        return True
+    except smtplib.SMTPAuthenticationError:
+        log.error("SMTP auth failed — check SMTP_USER / SMTP_PASSWORD")
+    except smtplib.SMTPException as exc:
+        log.error("SMTP error sending to %s: %s", to, exc)
+    except OSError as exc:
+        log.error("Network error sending email to %s: %s", to, exc)
+    return False
+
+
+# ── HTML templates ────────────────────────────────────────────────────────────
+
+_RISK_COLORS = {
+    "Low":      "#10B981",
+    "Medium":   "#F59E0B",
+    "High":     "#EF4444",
+    "Critical": "#7C3AED",
+}
+
+def _alert_email_html(
+    student_name:  str,
+    risk_level:    str,
+    risk_score:    float,
+    top_factors:   list[dict],
+    student_id:    int,
+    student_code:  Optional[str] = None,
+) -> str:
+    color   = _RISK_COLORS.get(risk_level, "#94A3B8")
+    factors_html = "".join(
+        f"<li style='margin:4px 0;color:#374151;'>"
+        f"<strong>{f.get('human_label', f.get('feature', ''))}</strong>: "
+        f"{f.get('actual_value', '')} "
+        f"({'↑ increases risk' if f.get('direction') == 'increases_risk' else '↓ decreases risk'})"
+        f"</li>"
+        for f in (top_factors or [])[:5]
+    )
+    code_line = f"<p style='color:#6B7280;font-size:13px;'>Code: {student_code}</p>" if student_code else ""
+
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Inter,Arial,sans-serif;background:#F8FAFC;padding:32px 0;margin:0;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;
+              border:1px solid #E2E8F0;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+
+    <!-- Header -->
+    <div style="background:#0F172A;padding:24px 32px;">
+      <h1 style="color:#fff;margin:0;font-size:18px;font-weight:700;">
+        🎯 JEE Dropout Prediction System
+      </h1>
+      <p style="color:#94A3B8;margin:4px 0 0;font-size:13px;">Risk Alert Notification</p>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:28px 32px;">
+      <div style="background:{color}18;border-left:4px solid {color};
+                  border-radius:6px;padding:16px 20px;margin-bottom:24px;">
+        <p style="margin:0;font-size:13px;color:#6B7280;font-weight:600;
+                  text-transform:uppercase;letter-spacing:.05em;">{risk_level} Risk Alert</p>
+        <h2 style="margin:6px 0 0;font-size:22px;color:#0F172A;">{student_name}</h2>
+        {code_line}
+        <p style="margin:8px 0 0;font-size:28px;font-weight:700;color:{color};">
+          {risk_score:.0f} <span style="font-size:14px;color:#94A3B8;font-weight:400;">/ 100</span>
+        </p>
+      </div>
+
+      <h3 style="color:#374151;font-size:14px;margin:0 0 10px;">Top Risk Factors</h3>
+      <ul style="padding-left:18px;margin:0 0 24px;">{factors_html}</ul>
+
+      <a href="http://localhost:5173/students/{student_id}"
+         style="display:inline-block;background:#6366F1;color:#fff;text-decoration:none;
+                padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">
+        View Student Profile →
+      </a>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#F8FAFC;padding:16px 32px;border-top:1px solid #E2E8F0;">
+      <p style="color:#9CA3AF;font-size:11px;margin:0;">
+        Confidential — For faculty use only. Generated by JEE Dropout Prediction System.
+      </p>
+    </div>
+  </div>
+</body>
+</html>"""
+
+
+def _digest_email_html(faculty_name: str, items: list[dict]) -> str:
+    rows = "".join(
+        f"<tr>"
+        f"<td style='padding:8px 12px;border-bottom:1px solid #F1F5F9;color:#374151;'>{item['student_name']}</td>"
+        f"<td style='padding:8px 12px;border-bottom:1px solid #F1F5F9;'>"
+        f"<span style='color:{_RISK_COLORS.get(item['risk_level'], '#94A3B8')};font-weight:600;'>"
+        f"{item['risk_level']}</span></td>"
+        f"<td style='padding:8px 12px;border-bottom:1px solid #F1F5F9;color:#6B7280;'>{item['alert_count']} alerts</td>"
+        f"</tr>"
+        for item in items
+    )
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Inter,Arial,sans-serif;background:#F8FAFC;padding:32px 0;margin:0;">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;
+              border:1px solid #E2E8F0;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+    <div style="background:#0F172A;padding:24px 32px;">
+      <h1 style="color:#fff;margin:0;font-size:18px;font-weight:700;">
+        📋 Daily Alert Digest
+      </h1>
+      <p style="color:#94A3B8;margin:4px 0 0;font-size:13px;">Good morning, {faculty_name}</p>
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="color:#374151;margin:0 0 20px;">
+        Here is today's summary of at-risk students assigned to you:
+      </p>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #E2E8F0;border-radius:8px;overflow:hidden;">
+        <thead>
+          <tr style="background:#F8FAFC;">
+            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6B7280;font-weight:600;
+                       text-transform:uppercase;letter-spacing:.05em;">Student</th>
+            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6B7280;font-weight:600;
+                       text-transform:uppercase;letter-spacing:.05em;">Risk Level</th>
+            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6B7280;font-weight:600;
+                       text-transform:uppercase;letter-spacing:.05em;">Open Alerts</th>
+          </tr>
+        </thead>
+        <tbody>{rows}</tbody>
+      </table>
+      <p style="margin-top:24px;">
+        <a href="http://localhost:5173/faculty"
+           style="display:inline-block;background:#6366F1;color:#fff;text-decoration:none;
+                  padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">
+          Open Dashboard →
+        </a>
+      </p>
+    </div>
+    <div style="background:#F8FAFC;padding:16px 32px;border-top:1px solid #E2E8F0;">
+      <p style="color:#9CA3AF;font-size:11px;margin:0;">
+        Confidential — For faculty use only. JEE Dropout Prediction System.
+      </p>
+    </div>
+  </div>
+</body>
+</html>"""
+
+
+def _parent_email_html(student_name: str, message: str) -> str:
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Inter,Arial,sans-serif;background:#F8FAFC;padding:32px 0;margin:0;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;
+              border:1px solid #E2E8F0;overflow:hidden;">
+    <div style="background:#0F172A;padding:24px 32px;">
+      <h1 style="color:#fff;margin:0;font-size:18px;">Important Update — {student_name}</h1>
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="color:#374151;line-height:1.7;">{message}</p>
+      <p style="color:#6B7280;font-size:13px;margin-top:20px;">
+        Please contact your ward's assigned faculty for further details.
+      </p>
+    </div>
+    <div style="background:#F8FAFC;padding:16px 32px;border-top:1px solid #E2E8F0;">
+      <p style="color:#9CA3AF;font-size:11px;margin:0;">JEE Dropout Prediction System</p>
+    </div>
+  </div>
+</body>
+</html>"""
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def send_alert_email(
+    faculty_email: str,
+    student_name:  str,
+    risk_level:    str,
+    risk_score:    float,
+    top_factors:   list[dict],
+    student_id:    int,
+    student_code:  Optional[str] = None,
+) -> bool:
+    """Send a risk alert email to a faculty member."""
+    subject = f"[{risk_level.upper()} RISK] {student_name} — Score {risk_score:.0f}/100"
+    html    = _alert_email_html(student_name, risk_level, risk_score, top_factors, student_id, student_code)
+    return _send(faculty_email, subject, html)
+
+
+def send_daily_digest(
+    faculty_email: str,
+    faculty_name:  str,
+    items:         list[dict],   # [{student_name, risk_level, alert_count}]
+) -> bool:
+    """Send a morning digest to a faculty member."""
+    if not items:
+        return True  # nothing to send
+    subject = f"📋 Daily Alert Digest — {len(items)} students need attention"
+    html    = _digest_email_html(faculty_name, items)
+    return _send(faculty_email, subject, html)
+
+
+def send_parent_notification(
+    parent_email:  str,
+    student_name:  str,
+    message:       str,
+) -> bool:
+    """Send a notification email to a student's parent/guardian."""
+    subject = f"Important Update Regarding {student_name}"
+    html    = _parent_email_html(student_name, message)
+    return _send(parent_email, subject, html)

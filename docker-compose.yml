@@ -1,0 +1,158 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml
+# Full-stack orchestration for the JEE Dropout Prediction System.
+#
+# Services
+# ────────
+#   db        — PostgreSQL 15 (persistent volume, healthcheck)
+#   backend   — FastAPI + Uvicorn (waits for db, mounts models + reports)
+#   frontend  — React SPA served by Nginx
+#   nginx     — Gateway reverse proxy: /api/ → backend, / → frontend
+#
+# Usage
+# ─────
+#   cp backend/.env.example backend/.env    # fill in secrets
+#   docker compose up --build -d
+#   docker compose logs -f backend          # tail logs
+#   docker compose down -v                  # destroy including volumes
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL database ─────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: jee_db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB:       jee_dropout_db
+      POSTGRES_USER:     jee_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}   # override in .env
+
+    volumes:
+      # Named volume — data survives container restarts and rebuilds
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:     ["CMD-SHELL", "pg_isready -U jee_user -d jee_dropout_db"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+      start_period: 20s
+
+    networks:
+      - internal
+
+
+  # ── FastAPI + Uvicorn backend ───────────────────────────────────────────────
+  backend:
+    build:
+      context:    ./backend
+      dockerfile: Dockerfile
+      target:     runtime        # use the lean second stage
+
+    container_name: jee_backend
+    restart: unless-stopped
+
+    # Load all settings from backend/.env
+    env_file: ./backend/.env
+
+    # These env vars override whatever is in .env — ensures the backend
+    # connects to the Docker service name 'db', not localhost.
+    environment:
+      DATABASE_URL: postgresql+asyncpg://jee_user:${POSTGRES_PASSWORD:-changeme}@db:5432/jee_dropout_db
+      MODEL_DIR:    /app/models
+
+    volumes:
+      # Persist trained ML models — survives backend rebuilds
+      - model_data:/app/models
+      # Persist generated PDF reports
+      - ./reports:/app/reports
+      # Persist uploaded CSV files
+      - ./uploads:/app/uploads
+
+    depends_on:
+      db:
+        condition: service_healthy   # don't start until Postgres is ready
+
+    expose:
+      - "8000"   # internal only — nginx proxies to this
+
+    healthcheck:
+      test:     ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout:  10s
+      retries:  3
+      start_period: 40s
+
+    networks:
+      - internal
+
+
+  # ── React SPA (Nginx) ────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context:    ./frontend
+      dockerfile: Dockerfile
+
+    container_name: jee_frontend
+    restart: unless-stopped
+
+    env_file: ./frontend/.env
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    expose:
+      - "80"     # internal only — gateway nginx proxies to this
+
+    networks:
+      - internal
+
+
+  # ── Gateway Nginx (public entry point) ──────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: jee_nginx
+    restart: unless-stopped
+
+    ports:
+      - "80:80"       # HTTP — change to "443:443" when adding TLS
+      # - "443:443"   # Uncomment once you add SSL certs
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+    depends_on:
+      - frontend
+      - backend
+
+    networks:
+      - internal
+
+
+# ── Named volumes ──────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type:   none
+      o:      bind
+      device: ./data/postgres    # host path — easy to back up
+
+  model_data:
+    driver: local
+    driver_opts:
+      type:   none
+      o:      bind
+      device: ./models           # ML .pkl files live here
+
+
+# ── Network ────────────────────────────────────────────────────────────────────
+networks:
+  internal:
+    driver: bridge
+    # All services communicate only on this internal network.
+    # Only 'nginx' exposes ports to the host.
