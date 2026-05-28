@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import api from '../../api/axiosConfig'
 import RiskBadge from '../../components/RiskBadge'
+import StudentChatPanel from '../../components/StudentChatPanel'
 import { TrendingUp, TrendingDown, Activity, Clock, Target, Award } from 'lucide-react'
 
 export default function StudentDashboard() {
@@ -9,6 +10,7 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState(null)
   const [error, setError] = useState(null)
+  const [shapFeatures, setShapFeatures] = useState([])
 
   useEffect(() => {
     fetchDashboardData()
@@ -21,11 +23,24 @@ export default function StudentDashboard() {
       
       const response = await api.get('/students/me/dashboard')
       setDashboardData(response.data)
+      
+      // Fetch SHAP features for chat context
+      try {
+        const shapResponse = await api.get('/predict/explain/me')
+        if (shapResponse.data) {
+          setShapFeatures(shapResponse.data.top_factors?.map(f => f.feature) || [])
+        }
+      } catch (shapErr) {
+        console.warn('SHAP data unavailable:', shapErr.message)
+        // Set default SHAP features
+        setShapFeatures(['attendance_rate', 'mock_test_avg', 'burnout_score'])
+      }
     } catch (err) {
       console.warn('Backend dashboard API unavailable, using mock data:', err.message)
       setError(err.message)
       // Fallback to mock data
       setDashboardData(getMockDashboardData())
+      setShapFeatures(['attendance_rate', 'mock_test_avg', 'burnout_score'])
     } finally {
       setLoading(false)
     }
