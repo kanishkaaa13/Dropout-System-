@@ -101,157 +101,168 @@ async def predict_student(
 
     Faculty can only predict for their assigned students.
     """
-    # ── Retrieve ML components from app state ────────────────────────────────
-    predictor = getattr(request.app.state, "predictor", None)
-    explainer = getattr(request.app.state, "explainer", None)
-
-    if predictor is None or explainer is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ML models are not loaded. The service may be starting up.",
-        )
-
-    # ── Validate student + RBAC ──────────────────────────────────────────────
-    student = _student_or_404(student_id, db)
-
-    if (
-        current_user.role == "faculty"
-        and student.assigned_faculty_id != current_user.id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not assigned to this student.",
-        )
-
-    # ── Step 1: Build features ───────────────────────────────────────────────
-    features_df = build_features_from_db(student_id, db)
-    if features_df is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Could not build features: student data is missing or corrupt.",
-        )
-
-    features_dict = features_df.iloc[0].to_dict()
-
-    # ── Step 2: ML prediction ────────────────────────────────────────────────
-    pred = predictor.predict_single(features_dict)
-
-    # ── Step 3: Risk score ───────────────────────────────────────────────────
-    risk = compute_risk_score(
-        ml_probability    = pred["ensemble_probability"],
-        burnout_score     = features_dict["burnout_score"],
-        mock_score_trend  = features_dict["mock_score_trend"],
-        attendance_rate   = features_dict["attendance_rate"],
-        sleep_hours       = features_dict["sleep_hours_avg"],
-        parental_pressure = features_dict["parental_pressure_level"],
-    )
-
-    # ── Step 4: SHAP explanation ─────────────────────────────────────────────
-    explanation    = explainer.explain(features_df)
-    summary_text   = explainer.generate_summary_text(
-        explanation["top_factors"],
-        student_name=student.full_name.split()[0],   # first name
-    )
-
-    # Generate waterfall plot (can be expensive; run only if needed)
     try:
-        waterfall_b64 = explainer.generate_waterfall_plot(features_df)
-    except Exception as exc:
-        logger.warning("Waterfall plot generation failed: %s", exc)
-        waterfall_b64 = None
+        # ── Retrieve ML components from app state ────────────────────────────────
+        predictor = getattr(request.app.state, "predictor", None)
+        explainer = getattr(request.app.state, "explainer", None)
 
-    # ── Step 5: Persist to DB ────────────────────────────────────────────────
-    assessment = RiskAssessment(
-        student_id=student_id,
-        assessed_at=datetime.now(timezone.utc),
-        risk_score=risk["score"],
-        risk_level=risk["level"],
-        ml_probability=pred["ensemble_probability"],
-        model_version=pred["model_version"],
-        feature_snapshot=features_dict,
-    )
-    db.add(assessment)
-    db.flush()  # get assessment.id without committing
+        if predictor is None or explainer is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="ML models are not loaded. The service may be starting up.",
+            )
 
-    shap_row = ShapExplanation(
-        assessment_id=assessment.id,
-        base_value=explanation["base_value"],
-        top_factors=explanation["top_factors"],
-        waterfall_plot=waterfall_b64,
-        summary_text=summary_text,
-    )
-    db.add(shap_row)
+        # ── Validate student + RBAC ──────────────────────────────────────────────
+        student = _student_or_404(student_id, db)
 
-    # ── Step 6: Create alert if risk >= Medium ────────────────────────────────
-    alert_created = False
-    if risk["level"] in ("Medium", "High", "Critical"):
-        alert_message = (
-            f"Student '{student.full_name}' has been flagged as "
-            f"{risk['level']} risk (score={risk['score']}/100). "
-            f"{summary_text}"
+        if (
+            current_user.role == "faculty"
+            and student.assigned_faculty_id != current_user.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not assigned to this student.",
+            )
+
+        # ── Step 1: Build features ───────────────────────────────────────────────
+        features_df = build_features_from_db(student_id, db)
+        if features_df is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Could not build features: student data is missing or corrupt.",
+            )
+
+        features_dict = features_df.iloc[0].to_dict()
+
+        # ── Step 2: ML prediction ────────────────────────────────────────────────
+        pred = predictor.predict_single(features_dict)
+
+        # ── Step 3: Risk score ───────────────────────────────────────────────────
+        risk = compute_risk_score(
+            ml_probability    = pred["ensemble_probability"],
+            burnout_score     = features_dict["burnout_score"],
+            mock_score_trend  = features_dict["mock_score_trend"],
+            attendance_rate   = features_dict["attendance_rate"],
+            sleep_hours       = features_dict["sleep_hours_avg"],
+            parental_pressure = features_dict["parental_pressure_level"],
         )
-        alert = Alert(
-            student_id=student_id,
-            assessment_id=assessment.id,
-            assigned_to=student.assigned_faculty_id,
-            alert_type="risk_threshold",
-            risk_level=risk["level"],
-            message=alert_message,
+
+        # ── Step 4: SHAP explanation ─────────────────────────────────────────────
+        explanation    = explainer.explain(features_df)
+        summary_text   = explainer.generate_summary_text(
+            explanation["top_factors"],
+            student_name=student.full_name.split()[0],   # first name
         )
-        db.add(alert)
-        alert_created = True
 
-    db.commit()
+        # Generate waterfall plot (can be expensive; run only if needed)
+        try:
+            waterfall_b64 = explainer.generate_waterfall_plot(features_df)
+        except Exception as exc:
+            logger.warning("Waterfall plot generation failed: %s", exc)
+            waterfall_b64 = None
 
-    # ── Step 7: Log prediction to prediction_logs table ─────────────────────
-    try:
-        from backend.app.models.database import PredictionLog
-        
-        prediction_log = PredictionLog(
+        # ── Step 5: Persist to DB ────────────────────────────────────────────────
+        assessment = RiskAssessment(
             student_id=student_id,
-            user_id=current_user.id,
-            user_role=current_user.role,
+            assessed_at=datetime.now(timezone.utc),
             risk_score=risk["score"],
             risk_level=risk["level"],
             ml_probability=pred["ensemble_probability"],
             model_version=pred["model_version"],
-            inference_time_ms=pred["inference_time_ms"],
             feature_snapshot=features_dict,
-            timestamp=datetime.now(timezone.utc),
         )
-        db.add(prediction_log)
+        db.add(assessment)
+        db.flush()  # get assessment.id without committing
+
+        shap_row = ShapExplanation(
+            assessment_id=assessment.id,
+            base_value=explanation["base_value"],
+            top_factors=explanation["top_factors"],
+            waterfall_plot=waterfall_b64,
+            summary_text=summary_text,
+        )
+        db.add(shap_row)
+
+        # ── Step 6: Create alert if risk >= Medium ────────────────────────────────
+        alert_created = False
+        if risk["level"] in ("Medium", "High", "Critical"):
+            alert_message = (
+                f"Student '{student.full_name}' has been flagged as "
+                f"{risk['level']} risk (score={risk['score']}/100). "
+                f"{summary_text}"
+            )
+            alert = Alert(
+                student_id=student_id,
+                assessment_id=assessment.id,
+                assigned_to=student.assigned_faculty_id,
+                alert_type="risk_threshold",
+                risk_level=risk["level"],
+                message=alert_message,
+            )
+            db.add(alert)
+            alert_created = True
+
         db.commit()
-        logger.info(f"Prediction logged for student_id={student_id}")
+
+        # ── Step 7: Log prediction to prediction_logs table ─────────────────────
+        try:
+            from backend.app.models.database import PredictionLog
+            
+            prediction_log = PredictionLog(
+                student_id=student_id,
+                user_id=current_user.id,
+                user_role=current_user.role,
+                risk_score=risk["score"],
+                risk_level=risk["level"],
+                ml_probability=pred["ensemble_probability"],
+                model_version=pred["model_version"],
+                inference_time_ms=pred["inference_time_ms"],
+                feature_snapshot=features_dict,
+                timestamp=datetime.now(timezone.utc),
+            )
+            db.add(prediction_log)
+            db.commit()
+            logger.info(f"Prediction logged for student_id={student_id}")
+        except Exception as exc:
+            logger.error(f"Failed to log prediction: {exc}")
+            # Don't fail the prediction if logging fails
+
+        logger.info(
+            "Prediction complete: student_id=%d  risk=%s (%.1f)  alert=%s",
+            student_id, risk["level"], risk["score"], alert_created,
+        )
+
+        # ── Step 8: Build response ────────────────────────────────────────────────
+        top_factors = [FeatureImpact(**f) for f in explanation["top_factors"]]
+        components  = RiskComponents(**risk["components"])
+
+        return PredictionResponse(
+            student_id=student_id,
+            assessment_id=assessment.id,
+            risk_score=risk["score"],
+            risk_level=risk["level"],
+            risk_color=risk["color"],
+            urgency=risk["urgency"],
+            ml_probability=pred["ensemble_probability"],
+            predicted_dropout=pred["predicted_dropout"],
+            risk_components=components,
+            top_risk_factors=top_factors,
+            counselor_summary=summary_text,
+            model_version=pred["model_version"],
+            assessed_at=assessment.assessed_at,
+            alert_created=alert_created,
+            inference_time_ms=pred["inference_time_ms"],
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as exc:
-        logger.error(f"Failed to log prediction: {exc}")
-        # Don't fail the prediction if logging fails
-
-    logger.info(
-        "Prediction complete: student_id=%d  risk=%s (%.1f)  alert=%s",
-        student_id, risk["level"], risk["score"], alert_created,
-    )
-
-    # ── Step 8: Build response ────────────────────────────────────────────────
-    top_factors = [FeatureImpact(**f) for f in explanation["top_factors"]]
-    components  = RiskComponents(**risk["components"])
-
-    return PredictionResponse(
-        student_id=student_id,
-        assessment_id=assessment.id,
-        risk_score=risk["score"],
-        risk_level=risk["level"],
-        risk_color=risk["color"],
-        urgency=risk["urgency"],
-        ml_probability=pred["ensemble_probability"],
-        predicted_dropout=pred["predicted_dropout"],
-        risk_components=components,
-        top_risk_factors=top_factors,
-        counselor_summary=summary_text,
-        model_version=pred["model_version"],
-        assessed_at=assessment.assessed_at,
-        alert_created=alert_created,
-        inference_time_ms=pred["inference_time_ms"],
-    )
+        # Catch any other exceptions and return a structured error
+        logger.error(f"Prediction failed for student_id={student_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Prediction failed: {str(exc)}",
+        )
 
 
 # ── GET /predict/explain/{student_id} ────────────────────────────────────────
