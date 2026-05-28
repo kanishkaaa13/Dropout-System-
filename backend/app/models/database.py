@@ -554,3 +554,46 @@ class PredictionLog(Base):
             f"<PredictionLog id={self.id} student_id={self.student_id} "
             f"risk={self.risk_level!r} score={self.risk_score:.1f}>"
         )
+
+
+# ─── Intervention ─────────────────────────────────────────────────────────────
+
+class Intervention(Base):
+    """
+    AI-generated intervention plan for a student.
+
+    Contains priority, summary, action items, and parent communication draft.
+    """
+
+    __tablename__ = "interventions"
+
+    id:              Mapped[int]         = mapped_column(Integer, primary_key=True, index=True)
+    student_id:      Mapped[int]         = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by:      Mapped[int]         = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=False, index=True)
+    created_at:      Mapped[datetime]    = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False,
+        index=True,
+    )
+    priority:        Mapped[str]         = mapped_column(String(20), nullable=False, index=True)  # high / medium / low
+    summary:         Mapped[str | None]  = mapped_column(Text)
+    actions:         Mapped[list | None]  = mapped_column(JSON)  # list of action dicts
+    parent_message:  Mapped[str | None]  = mapped_column(Text)
+    status:          Mapped[str]         = mapped_column(String(20), nullable=False, default="pending", index=True)  # pending / in_progress / completed
+    completed_at:    Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_interventions_student_status", "student_id", "status"),
+        Index("ix_interventions_created_at", "created_at"),
+    )
+
+    # Relationships
+    student:    Mapped[Student] = relationship("Student", foreign_keys=[student_id])
+    creator:    Mapped[User]    = relationship("User", foreign_keys=[created_by])
+
+    def __repr__(self) -> str:
+        return (
+            f"<Intervention id={self.id} student_id={self.student_id} "
+            f"priority={self.priority!r} status={self.status!r}>"
+        )

@@ -4,6 +4,7 @@ import api from '../../api/axiosConfig'
 import RiskBadge from '../../components/RiskBadge'
 import CreativePlanner from '../../components/CreativePlanner'
 import ExplanationCard from '../../components/ExplanationCard'
+import InterventionPanel from '../../components/InterventionPanel'
 import { TrendingUp, TrendingDown, Activity, Clock, Target, Award, LayoutDashboard, BookOpen } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
@@ -256,6 +257,14 @@ export default function StudentDashboard() {
 
           {/* SHAP Explanation Card */}
           <ExplanationCard studentId={user?.id} />
+
+          {/* AI Intervention Panel */}
+          <InterventionPanel
+            studentId={user?.id}
+            riskFactors={data}
+            riskScore={data.risk_score}
+            riskLevel={data.risk_level}
+          />
 
           {/* Stress & Wellness Index */}
           <div className="bg-white rounded-xl shadow-sm p-6">

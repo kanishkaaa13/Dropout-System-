@@ -190,21 +190,23 @@ def create_app() -> FastAPI:
         )
 
     # ── Routers ───────────────────────────────────────────────────────────────
-    from backend.app.routers.auth       import router as auth_router
-    from backend.app.routers.students   import router as students_router
-    from backend.app.routers.prediction import router as prediction_router
-    from backend.app.routers.alerts     import router as alerts_router
-    from backend.app.routers.reports    import router as reports_router
-    from backend.app.routers.chat       import router as chat_router
+    from backend.app.routers.auth           import router as auth_router
+    from backend.app.routers.students       import router as students_router
+    from backend.app.routers.prediction     import router as prediction_router
+    from backend.app.routers.alerts         import router as alerts_router
+    from backend.app.routers.reports        import router as reports_router
+    from backend.app.routers.chat           import router as chat_router
+    from backend.app.routers.interventions  import router as interventions_router
 
     API_PREFIX = "/api/v1"
 
-    app.include_router(auth_router,       prefix=API_PREFIX)
-    app.include_router(students_router,   prefix=API_PREFIX)
-    app.include_router(prediction_router, prefix=API_PREFIX)
-    app.include_router(alerts_router,     prefix=API_PREFIX)
-    app.include_router(reports_router,    prefix=API_PREFIX)
-    app.include_router(chat_router,       prefix=API_PREFIX)
+    app.include_router(auth_router,          prefix=API_PREFIX)
+    app.include_router(students_router,      prefix=API_PREFIX)
+    app.include_router(prediction_router,    prefix=API_PREFIX)
+    app.include_router(alerts_router,        prefix=API_PREFIX)
+    app.include_router(reports_router,       prefix=API_PREFIX)
+    app.include_router(chat_router,          prefix=API_PREFIX)
+    app.include_router(interventions_router, prefix=API_PREFIX)
 
     # ── Health check with uptime and model version ───────────────────────────────
 
