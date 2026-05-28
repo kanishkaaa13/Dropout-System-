@@ -44,9 +44,9 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 # ── Load app config + models ──────────────────────────────────────────────────
-from backend.app.config import settings          # noqa: E402
-from backend.app.database import SYNC_URL, ASYNC_URL, Base  # noqa: E402
-import backend.app.models.database as _models    # noqa: E402, F401 — registers all models
+from backend.app.core.config import settings          # noqa: E402
+from backend.app.core.database import SYNC_URL, ASYNC_URL, Base  # noqa: E402
+from backend.app.models import user, student, prediction, alert  # noqa: E402, F401 — registers all models
 
 # ── Alembic Config object ─────────────────────────────────────────────────────
 config = context.config
