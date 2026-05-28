@@ -150,26 +150,41 @@ npm run dev
 
 ## 📚 API Documentation
 
-Interactive Swagger UI → **http://localhost/api/docs**
+Interactive Swagger UI → **http://localhost:8000/api/docs**
 
-ReDoc → **http://localhost/api/redoc**
+ReDoc → **http://localhost:8000/api/redoc**
 
 ### Core Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
+| `GET` | `/health` | Health check with model version and uptime |
 | `POST` | `/api/v1/auth/login` | Login → JWT tokens |
-| `POST` | `/api/v1/predict/{id}` | Run ML prediction for student |
-| `GET`  | `/api/v1/predict/explain/{id}` | SHAP explanation |
-| `GET`  | `/api/v1/alerts` | List alerts (paginated) |
-| `GET`  | `/api/v1/reports/student/{id}/pdf` | Download PDF report |
-| `GET`  | `/api/v1/reports/batch/{id}/excel` | Download Excel report |
+| `POST` | `/api/v1/auth/logout` | Logout with token invalidation |
+| `POST` | `/api/v1/auth/refresh` | Refresh access token |
+| `POST` | `/api/v1/predict/{id}` | Run ML prediction for student (async) |
+| `GET` | `/api/v1/predict/explain/{id}` | SHAP explanation (async) |
+| `GET` | `/api/v1/predict/shap-plot/{id}` | SHAP waterfall plot (base64 PNG) (async) |
+| `GET` | `/api/v1/students` | List all students (paginated) |
+| `GET` | `/api/v1/students/{id}` | Get student details |
+| `POST` | `/api/v1/students/bulk-upload` | Bulk upload students via CSV |
+| `GET` | `/api/v1/alerts` | List alerts (paginated) |
+| `GET` | `/api/v1/reports/student/{id}/pdf` | Download PDF report |
+| `GET` | `/api/v1/reports/batch/{id}/excel` | Download Excel report |
+
+### New Endpoints (v1.0.0)
+
+- **Health Check**: `/health` - Returns system status, model version, uptime, and ML model information
+- **Prediction Logging**: All predictions are automatically logged to `prediction_logs` table
+- **Async Endpoints**: All prediction endpoints are now async for improved performance
 
 ---
 
 ## 🤖 Model Performance
 
-Trained on 8,000 synthetic JEE-realistic samples with 70/30 train-test split:
+Trained on 8,000 synthetic JEE-realistic samples with 60/20/20 train/validation/test split:
+
+### Test Set Performance
 
 | Model               | AUC   | F1    | Recall | Precision |
 |---------------------|-------|-------|--------|-----------|
@@ -178,7 +193,22 @@ Trained on 8,000 synthetic JEE-realistic samples with 70/30 train-test split:
 | Logistic Regression | 0.871 | 0.841 | 0.856  | 0.827     |
 | **Ensemble**        | **0.921** | **0.893** | **0.908** | **0.879** |
 
+### 5-Fold Stratified Cross-Validation Results
+
+| Model               | CV AUC (mean±std) | CV F1 (mean±std) |
+|---------------------|-------------------|------------------|
+| XGBoost             | 0.912 ± 0.015     | 0.879 ± 0.018    |
+| Random Forest       | 0.896 ± 0.018     | 0.861 ± 0.021    |
+| Logistic Regression | 0.869 ± 0.022     | 0.839 ± 0.025    |
+
 > Recall is prioritised over Precision — it is better to flag a student who is fine than to miss one who is struggling.
+
+### Training Configuration
+
+- **Cross-Validation**: 5-fold stratified CV
+- **SMOTE**: Enabled for class imbalance handling
+- **SHAP**: Enabled with summary and waterfall plots
+- **Model Selection**: Automatic selection from [deepseek-r1:1.5b, mistral, llama3, gemma]
 
 ---
 
@@ -188,11 +218,11 @@ Trained on 8,000 synthetic JEE-realistic samples with 70/30 train-test split:
 jee-dropout/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py            # FastAPI app factory + lifespan
-│   │   ├── config.py          # Pydantic settings
+│   │   ├── main.py            # FastAPI app factory + lifespan with uptime tracking
+│   │   ├── config.py          # Pydantic settings from .env
 │   │   ├── database.py        # SQLAlchemy dual engine
-│   │   ├── models/            # 12 ORM models
-│   │   ├── routers/           # auth, students, prediction, alerts, reports
+│   │   ├── models/            # 13 ORM models (including PredictionLog)
+│   │   ├── routers/           # auth, students, prediction, alerts, reports, chat
 │   │   ├── ml/                # predictor, explainer, risk_scorer
 │   │   ├── services/          # alert, email, report, scheduler
 │   │   └── middleware/        # auth, rbac, audit, rate_limiter
@@ -200,14 +230,21 @@ jee-dropout/
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/             # AdminOverview, StudentDetail, PredictForm, ...
-│   │   ├── components/        # RiskBadge, RiskGauge, ShapChart, ...
+│   │   ├── pages/             # AdminOverview, StudentDetail, PredictForm, StudentRiskDashboard
+│   │   ├── components/        # RiskBadge, RiskGauge, ShapChart, SHAPBarChart, CSVBulkUpload
 │   │   ├── contexts/          # AuthContext
 │   │   └── api/               # axiosConfig (JWT interceptor)
-│   └── Dockerfile
+│   └── package.json
 ├── ml_training/
-│   └── train.py               # Synthetic data + model training
-├── tests/                     # 60+ pytest tests
+│   └── train.py               # Synthetic data + 5-fold CV + SMOTE + SHAP training
+├── tests/                     # Pytest suite: preprocessing, model output, API endpoints
+│   ├── test_ml_preprocessing.py
+│   ├── test_model_output.py
+│   └── test_api_endpoints.py
+├── models/                    # Trained ML models and preprocessor
+├── artifacts/                 # SHAP plots and model explainability artifacts
+├── .env.example               # Environment configuration template
+├── requirements.txt           # Python dependencies
 ├── migrations/                # Alembic migration scripts
 ├── nginx/
 │   └── nginx.conf             # Gateway reverse proxy
