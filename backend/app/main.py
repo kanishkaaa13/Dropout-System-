@@ -197,6 +197,7 @@ def create_app() -> FastAPI:
     from backend.app.routers.reports        import router as reports_router
     from backend.app.routers.chat           import router as chat_router
     from backend.app.routers.interventions  import router as interventions_router
+    from backend.app.routers.demo           import router as demo_router
 
     API_PREFIX = "/api/v1"
 
@@ -207,6 +208,7 @@ def create_app() -> FastAPI:
     app.include_router(reports_router,       prefix=API_PREFIX)
     app.include_router(chat_router,          prefix=API_PREFIX)
     app.include_router(interventions_router, prefix=API_PREFIX)
+    app.include_router(demo_router,          prefix=API_PREFIX)
 
     # ── Health check with uptime and model version ───────────────────────────────
 

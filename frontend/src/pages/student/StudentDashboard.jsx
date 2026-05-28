@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useOutletContext } from 'react-router-dom'
 import api from '../../api/axiosConfig'
 import RiskBadge from '../../components/RiskBadge'
 import CreativePlanner from '../../components/CreativePlanner'
@@ -10,6 +11,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 
 export default function StudentDashboard() {
   const { user } = useAuth()
+  const { isDemoMode } = useOutletContext() || { isDemoMode: false }
   const [loading, setLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState(null)
   const [error, setError] = useState(null)
@@ -18,26 +20,122 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     fetchDashboardData()
-  }, [])
+  }, [isDemoMode])
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      const response = await api.get('/students/me/dashboard')
-      setDashboardData(response.data)
-      
-      // Fetch SHAP features for chat context
-      try {
-        const shapResponse = await api.get('/predict/explain/me')
-        if (shapResponse.data) {
-          setShapFeatures(shapResponse.data.top_factors?.map(f => f.feature) || [])
+      if (isDemoMode) {
+        // Fetch demo student data
+        try {
+          const response = await api.get('/students?is_demo=true')
+          const demoStudents = response.data.students || []
+          if (demoStudents.length > 0) {
+            // Use the first demo student for the dashboard
+            const demoStudent = demoStudents[0]
+            setDashboardData({
+              student_name: demoStudent.full_name,
+              registration_code: demoStudent.student_code || 'DEMO001',
+              batch: 'Demo Batch 2025',
+              predicted_rank: demoStudent.target_rank || 500,
+              target_rank: 500,
+              mock_average: 180,
+              mock_total: 360,
+              risk_level: demoStudent.risk_level || 'Medium',
+              risk_score: demoStudent.risk_score || 50,
+              attendance_rate: 75,
+              assignment_completion: 78,
+              weekly_study_target: 40,
+              weekly_study_actual: 35,
+              subjects: {
+                physics: { score: 62, trend: 'up', mock_score: 112 },
+                chemistry: { score: 58, trend: 'down', mock_score: 105 },
+                mathematics: { score: 71, trend: 'up', mock_score: 128 }
+              },
+              wellness: {
+                burnout_score: 6,
+                stress_level: 7,
+                sleep_hours: 5.5,
+                study_hours: 10,
+                peer_pressure: 5
+              },
+              score_trend_data: [
+                { name: 'Mock 1', physics: 58, chemistry: 52, maths: 65 },
+                { name: 'Mock 2', physics: 62, chemistry: 55, maths: 68 },
+                { name: 'Mock 3', physics: 60, chemistry: 58, maths: 72 },
+                { name: 'Mock 4', physics: 65, chemistry: 62, maths: 69 },
+                { name: 'Mock 5', physics: 62, chemistry: 58, maths: 71 },
+              ]
+            })
+            setShapFeatures(['attendance_rate', 'mock_test_avg', 'burnout_score'])
+          } else {
+            // Seed demo data if no demo students exist
+            await api.post('/demo/seed')
+            // Retry fetching
+            const retryResponse = await api.get('/students?is_demo=true')
+            const retryStudents = retryResponse.data.students || []
+            if (retryStudents.length > 0) {
+              const demoStudent = retryStudents[0]
+              setDashboardData({
+                student_name: demoStudent.full_name,
+                registration_code: demoStudent.student_code || 'DEMO001',
+                batch: 'Demo Batch 2025',
+                predicted_rank: demoStudent.target_rank || 500,
+                target_rank: 500,
+                mock_average: 180,
+                mock_total: 360,
+                risk_level: demoStudent.risk_level || 'Medium',
+                risk_score: demoStudent.risk_score || 50,
+                attendance_rate: 75,
+                assignment_completion: 78,
+                weekly_study_target: 40,
+                weekly_study_actual: 35,
+                subjects: {
+                  physics: { score: 62, trend: 'up', mock_score: 112 },
+                  chemistry: { score: 58, trend: 'down', mock_score: 105 },
+                  mathematics: { score: 71, trend: 'up', mock_score: 128 }
+                },
+                wellness: {
+                  burnout_score: 6,
+                  stress_level: 7,
+                  sleep_hours: 5.5,
+                  study_hours: 10,
+                  peer_pressure: 5
+                },
+                score_trend_data: [
+                  { name: 'Mock 1', physics: 58, chemistry: 52, maths: 65 },
+                  { name: 'Mock 2', physics: 62, chemistry: 55, maths: 68 },
+                  { name: 'Mock 3', physics: 60, chemistry: 58, maths: 72 },
+                  { name: 'Mock 4', physics: 65, chemistry: 62, maths: 69 },
+                  { name: 'Mock 5', physics: 62, chemistry: 58, maths: 71 },
+                ]
+              })
+              setShapFeatures(['attendance_rate', 'mock_test_avg', 'burnout_score'])
+            }
+          }
+        } catch (demoErr) {
+          console.warn('Demo mode failed, using mock data:', demoErr.message)
+          setDashboardData(getMockDashboardData())
+          setShapFeatures(['attendance_rate', 'mock_test_avg', 'burnout_score'])
         }
-      } catch (shapErr) {
-        console.warn('SHAP data unavailable:', shapErr.message)
-        // Set default SHAP features
-        setShapFeatures(['attendance_rate', 'mock_test_avg', 'burnout_score'])
+      } else {
+        // Normal mode - fetch real student data
+        const response = await api.get('/students/me/dashboard')
+        setDashboardData(response.data)
+        
+        // Fetch SHAP features for chat context
+        try {
+          const shapResponse = await api.get('/predict/explain/me')
+          if (shapResponse.data) {
+            setShapFeatures(shapResponse.data.top_factors?.map(f => f.feature) || [])
+          }
+        } catch (shapErr) {
+          console.warn('SHAP data unavailable:', shapErr.message)
+          // Set default SHAP features
+          setShapFeatures(['attendance_rate', 'mock_test_avg', 'burnout_score'])
+        }
       }
     } catch (err) {
       console.warn('Backend dashboard API unavailable, using mock data:', err.message)

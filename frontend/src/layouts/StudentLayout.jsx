@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  LayoutDashboard, Brain, MessageSquare, LogOut, GraduationCap, Menu, X
+  LayoutDashboard, Brain, MessageSquare, LogOut, GraduationCap, Menu, X, Sparkles
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
@@ -16,6 +16,7 @@ export default function StudentLayout() {
   const { user, role, logout } = useAuth()
   const navigate = useNavigate()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isDemoMode, setIsDemoMode] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -37,6 +38,20 @@ export default function StudentLayout() {
 
   return (
     <div className="flex h-screen bg-[#F8F9FC] overflow-hidden font-sans">
+      {/* Demo Mode Banner */}
+      {isDemoMode && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-400 text-amber-900 px-4 py-2 text-sm font-medium flex items-center justify-center gap-2">
+          <Sparkles className="w-4 h-4" />
+          <span>You are viewing demo data — not real students</span>
+          <button
+            onClick={() => setIsDemoMode(false)}
+            className="ml-4 px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs"
+          >
+            Exit Demo
+          </button>
+        </div>
+      )}
+
       {/* Mobile menu button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -89,6 +104,20 @@ export default function StudentLayout() {
               {label}
             </NavLink>
           ))}
+          
+          {/* Demo Mode Toggle */}
+          <button
+            onClick={() => setIsDemoMode(!isDemoMode)}
+            className={clsx(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full',
+              isDemoMode
+                ? 'bg-amber-100 text-amber-700'
+                : 'text-gray-600 hover:bg-gray-100'
+            )}
+          >
+            <Sparkles className="w-4 h-4 shrink-0" />
+            {isDemoMode ? 'Demo Mode On' : 'Demo Mode'}
+          </button>
         </nav>
 
         {/* User profile card */}
@@ -125,7 +154,7 @@ export default function StudentLayout() {
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto px-6 py-6">
-          <Outlet />
+          <Outlet context={{ isDemoMode }} />
         </div>
       </main>
     </div>
