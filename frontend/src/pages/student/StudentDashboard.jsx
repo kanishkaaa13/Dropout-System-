@@ -55,6 +55,7 @@ export default function StudentDashboard() {
     mock_average: 180,
     mock_total: 360,
     risk_level: 'Medium',
+    risk_score: 55,
     attendance_rate: 85,
     assignment_completion: 78,
     subjects: {
