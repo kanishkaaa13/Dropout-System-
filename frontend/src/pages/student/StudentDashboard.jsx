@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import api from '../../api/axiosConfig'
 import RiskBadge from '../../components/RiskBadge'
 import CreativePlanner from '../../components/CreativePlanner'
+import ExplanationCard from '../../components/ExplanationCard'
 import { TrendingUp, TrendingDown, Activity, Clock, Target, Award, LayoutDashboard, BookOpen } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
@@ -252,6 +253,9 @@ export default function StudentDashboard() {
               </div>
             </div>
           </div>
+
+          {/* SHAP Explanation Card */}
+          <ExplanationCard studentId={user?.id} />
 
           {/* Stress & Wellness Index */}
           <div className="bg-white rounded-xl shadow-sm p-6">

@@ -34,6 +34,8 @@ from backend.app.schemas.prediction import (
     PredictionResponse,
     RiskComponents,
     WaterfallPlotResponse,
+    SimpleExplanationResponse,
+    SimpleFactor,
 )
 
 logger = logging.getLogger(__name__)
@@ -326,4 +328,73 @@ async def get_shap_plot(
         assessment_id=assessment.id,
         plot_base64=shap_row.waterfall_plot,
         assessed_at=assessment.assessed_at,
+    )
+
+
+# ── GET /api/students/{id}/explanation ─────────────────────────────────────────
+
+@router.get(
+    "/students/{student_id}/explanation",
+    response_model=SimpleExplanationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get simplified SHAP explanation for a student",
+)
+async def get_student_explanation(
+    student_id:   int,
+    current_user: User    = Depends(get_faculty_or_admin),
+    db:           Session = Depends(get_db),
+) -> SimpleExplanationResponse:
+    """
+    Return a simplified SHAP explanation with risk score and factors.
+    
+    Response format:
+    {
+      "risk_score": 0.82,
+      "factors": [
+        {"feature": "attendance", "impact": +32, "value": "54%", "direction": "risk"},
+        {"feature": "stress_level", "impact": +21, "value": "8/10", "direction": "risk"},
+        {"feature": "math_score", "impact": -12, "value": "71%", "direction": "protective"}
+      ]
+    }
+    """
+    _student_or_404(student_id, db)
+    assessment = _latest_assessment_or_404(student_id, db)
+
+    shap_row = assessment.shap_explanation
+    if shap_row is None or not shap_row.top_factors:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="SHAP explanation not available for this assessment.",
+        )
+
+    # Convert to simplified format
+    factors = []
+    for factor in shap_row.top_factors:
+        direction = "risk" if factor["direction"] == "increases_risk" else "protective"
+        impact = round(abs(factor["shap_value"]) * 100, 1)
+        
+        # Format value based on feature
+        feature_name = factor["feature"]
+        actual_value = factor["actual_value"]
+        
+        if "rate" in feature_name or "score" in feature_name:
+            value_str = f"{actual_value:.0f}%"
+        elif "hours" in feature_name:
+            value_str = f"{actual_value:.1f}h"
+        else:
+            value_str = str(actual_value)
+        
+        factors.append(SimpleFactor(
+            feature=feature_name,
+            impact=impact,
+            value=value_str,
+            direction=direction
+        ))
+
+    # Normalize risk_score to 0-1 range
+    risk_score_normalized = assessment.risk_score / 100.0
+
+    return SimpleExplanationResponse(
+        risk_score=round(risk_score_normalized, 2),
+        factors=factors
     )

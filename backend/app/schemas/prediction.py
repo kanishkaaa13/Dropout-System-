@@ -101,3 +101,17 @@ class WaterfallPlotResponse(BaseModel):
     assessment_id: int
     plot_base64:   str      # base64-encoded PNG
     assessed_at:   datetime
+
+
+# ── Simplified explanation response for frontend ──────────────────────────────
+
+class SimpleFactor(BaseModel):
+    feature: str
+    impact: float
+    value: str
+    direction: str  # "risk" | "protective"
+
+
+class SimpleExplanationResponse(BaseModel):
+    risk_score: float
+    factors: list[SimpleFactor]
