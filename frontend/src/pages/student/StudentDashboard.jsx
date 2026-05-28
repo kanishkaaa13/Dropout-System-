@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import api from '../../api/axiosConfig'
 import RiskBadge from '../../components/RiskBadge'
-import StudentChatPanel from '../../components/StudentChatPanel'
 import CreativePlanner from '../../components/CreativePlanner'
-import { TrendingUp, TrendingDown, Activity, Clock, Target, Award, LayoutDashboard } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, Clock, Target, Award, LayoutDashboard, BookOpen } from 'lucide-react'
 
 export default function StudentDashboard() {
   const { user } = useAuth()
@@ -60,6 +59,8 @@ export default function StudentDashboard() {
     risk_score: 55,
     attendance_rate: 85,
     assignment_completion: 78,
+    weekly_study_target: 40,
+    weekly_study_actual: 35,
     subjects: {
       physics: { score: 62, trend: 'up', mock_score: 112 },
       chemistry: { score: 58, trend: 'down', mock_score: 105 },
@@ -91,188 +92,201 @@ export default function StudentDashboard() {
 
   const data = dashboardData || getMockDashboardData()
 
-  // Prepare student data for chat panel
-  const studentDataForChat = {
-    full_name: data.student_name,
-    risk_score: data.risk_score,
-    risk_level: data.risk_level
-  }
+  // Prepare student data for chat panel (removed - now separate page)
+  // const studentDataForChat = {
+  //   full_name: data.student_name,
+  //   risk_score: data.risk_score,
+  //   risk_level: data.risk_level
+  // }
 
   return (
-    <div className="flex gap-6 h-full">
-      {/* Main Content - Left Side */}
-      <div className="flex-1 space-y-6 overflow-y-auto">
-        {/* Header */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">
-                Welcome back, {data.student_name}
-              </h1>
-              <p className="text-slate-500 mt-1">
-                {data.registration_code} • {data.batch}
-              </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">
+              Welcome back, {data.student_name}
+            </h1>
+            <p className="text-gray-500 mt-1">
+              {data.registration_code} • {data.batch}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* View Toggle Buttons */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setActiveView('dashboard')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
+                  activeView === 'dashboard'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Dashboard
+              </button>
+              <button
+                onClick={() => setActiveView('planner')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
+                  activeView === 'planner'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                Planner
+              </button>
             </div>
-            <div className="flex items-center gap-3">
-              {/* View Toggle Buttons */}
-              <div className="flex bg-slate-100 rounded-lg p-1">
-                <button
-                  onClick={() => setActiveView('dashboard')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
-                    activeView === 'dashboard'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Dashboard
-                </button>
-                <button
-                  onClick={() => setActiveView('planner')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
-                    activeView === 'planner'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Target className="w-4 h-4" />
-                  Planner
-                </button>
+            {error && (
+              <div className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
+                Using offline mode
               </div>
-              {error && (
-                <div className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
-                  Using offline mode
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
-
-        {/* Conditional Rendering based on active view */}
-        {activeView === 'dashboard' ? (
-          <>
-            {/* Summary Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Predicted Rank */}
-              <MetricCard
-                title="Predicted Rank"
-                value={data.predicted_rank}
-                subtitle={`Target: Top ${data.target_rank}`}
-                icon={<Target className="w-5 h-5" />}
-                trend={data.predicted_rank <= data.target_rank ? 'up' : 'down'}
-                color={data.predicted_rank <= data.target_rank ? 'green' : 'red'}
-              />
-
-              {/* Mock Test Average */}
-              <MetricCard
-                title="Mock Test Average"
-                value={`${data.mock_average} / ${data.mock_total}`}
-                subtitle="Last 5 tests"
-                icon={<Award className="w-5 h-5" />}
-                trend="neutral"
-                color="blue"
-              />
-
-              {/* Risk Profile */}
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-slate-600">Risk Profile</p>
-                  <Activity className="w-5 h-5 text-slate-400" />
-                </div>
-                <div className="flex items-center justify-between">
-                  <RiskBadge level={data.risk_level} size="lg" showLabel />
-                </div>
-              </div>
-
-              {/* Engagement Metrics */}
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-slate-600">Engagement</p>
-                  <Clock className="w-5 h-5 text-slate-400" />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Attendance</span>
-                    <span className="font-medium text-slate-900">{data.attendance_rate}%</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Assignments</span>
-                    <span className="font-medium text-slate-900">{data.assignment_completion}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Academic Analytics */}
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-6">Academic Analytics</h2>
-              
-              {/* Subject Health */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                {Object.entries(data.subjects).map(([subject, info]) => (
-                  <SubjectCard
-                    key={subject}
-                    subject={subject}
-                    score={info.score}
-                    trend={info.trend}
-                    mockScore={info.mock_score}
-                  />
-                ))}
-              </div>
-
-              {/* Score Trend */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-600 mb-3">Score Trend</h3>
-                <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                  <ScoreTrendPlaceholder data={data.score_history} />
-                </div>
-              </div>
-            </div>
-
-            {/* Stress & Wellness Index */}
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-6">Stress & Wellness Index</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <WellnessMetric
-                  label="Burnout Score"
-                  value={data.wellness.burnout_score}
-                  max={10}
-                  color="red"
-                />
-                <WellnessMetric
-                  label="Stress Level"
-                  value={data.wellness.stress_level}
-                  max={10}
-                  color="amber"
-                />
-                <WellnessMetric
-                  label="Sleep vs Study"
-                  value={`${data.wellness.sleep_hours}h / ${data.wellness.study_hours}h`}
-                  type="ratio"
-                />
-                <WellnessMetric
-                  label="Peer Pressure"
-                  value={data.wellness.peer_pressure}
-                  max={10}
-                  color="purple"
-                />
-              </div>
-            </div>
-          </>
-        ) : (
-          /* Creative Planner View */
-          <CreativePlanner />
-        )}
-
-        {/* Chat Panel - Right Side */}
-        <div className="w-96 flex-shrink-0">
-          <StudentChatPanel 
-            studentData={studentDataForChat} 
-            shapFeatures={shapFeatures}
-          />
-        </div>
       </div>
+
+      {/* Conditional Rendering based on active view */}
+      {activeView === 'dashboard' ? (
+        <>
+          {/* Summary Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Predicted Rank */}
+            <MetricCard
+              title="Predicted Rank"
+              value={data.predicted_rank}
+              subtitle={`Target: Top ${data.target_rank}`}
+              icon={<Target className="w-5 h-5" />}
+              trend={data.predicted_rank <= data.target_rank ? 'up' : 'down'}
+              color={data.predicted_rank <= data.target_rank ? 'green' : 'red'}
+            />
+
+            {/* Mock Test Average */}
+            <MetricCard
+              title="Mock Test Average"
+              value={`${data.mock_average} / ${data.mock_total}`}
+              subtitle="Last 5 tests"
+              icon={<Award className="w-5 h-5" />}
+              trend="neutral"
+              color="blue"
+            />
+
+            {/* Risk Profile */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium text-gray-600">Risk Profile</p>
+                <Activity className="w-5 h-5 text-gray-400" />
+              </div>
+              <div className="flex items-center justify-between">
+                <RiskBadge level={data.risk_level} size="lg" showLabel />
+              </div>
+            </div>
+
+            {/* Engagement Metrics */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium text-gray-600">Engagement</p>
+                <Clock className="w-5 h-5 text-gray-400" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Attendance</span>
+                  <span className="font-medium text-gray-900">{data.attendance_rate}%</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Assignments</span>
+                  <span className="font-medium text-gray-900">{data.assignment_completion}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Weekly Goal Card */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-[#6B5CE7]" />
+                Weekly Study Goal
+              </h2>
+              <span className="text-sm text-gray-500">
+                {data.weekly_study_actual} / {data.weekly_study_target} hours
+              </span>
+            </div>
+            <div className="relative h-4 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="absolute top-0 left-0 h-full bg-[#6B5CE7] rounded-full transition-all duration-500"
+                style={{ width: `${(data.weekly_study_actual / data.weekly_study_target) * 100}%` }}
+              />
+            </div>
+            <p className="text-sm text-gray-500 mt-2">
+              {data.weekly_study_actual >= data.weekly_study_target 
+                ? "🎉 You've met your weekly study goal!" 
+                : `Keep going! ${data.weekly_study_target - data.weekly_study_actual} more hours to reach your goal.`}
+            </p>
+          </div>
+
+          {/* Academic Analytics */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-6">Academic Analytics</h2>
+            
+            {/* Subject Health */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {Object.entries(data.subjects).map(([subject, info]) => (
+                <SubjectCard
+                  key={subject}
+                  subject={subject}
+                  score={info.score}
+                  trend={info.trend}
+                  mockScore={info.mock_score}
+                />
+              ))}
+            </div>
+
+            {/* Score Trend */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-600 mb-3">Score Trend</h3>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <ScoreTrendChart data={data.score_history} />
+              </div>
+            </div>
+          </div>
+
+          {/* Stress & Wellness Index */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-6">Stress & Wellness Index</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <WellnessMetric
+                label="Burnout Score"
+                value={data.wellness.burnout_score}
+                max={10}
+                color="red"
+              />
+              <WellnessMetric
+                label="Stress Level"
+                value={data.wellness.stress_level}
+                max={10}
+                color="amber"
+              />
+              <WellnessMetric
+                label="Sleep vs Study"
+                value={`${data.wellness.sleep_hours}h / ${data.wellness.study_hours}h`}
+                type="ratio"
+              />
+              <WellnessMetric
+                label="Peer Pressure"
+                value={data.wellness.peer_pressure}
+                max={10}
+                color="purple"
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        /* Creative Planner View */
+        <CreativePlanner />
+      )}
     </div>
   )
 }
@@ -286,16 +300,22 @@ function MetricCard({ title, value, subtitle, icon, trend, color }) {
     <TrendingDown className="w-4 h-4 text-red-500" />
   ) : null
 
+  const colorClasses = {
+    green: 'text-emerald-500',
+    red: 'text-red-500',
+    blue: 'text-blue-500'
+  }
+
   return (
-    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+    <div className="bg-white rounded-xl shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-slate-600">{title}</p>
-        <div className={`text-${color}-500`}>{icon}</div>
+        <p className="text-sm font-medium text-gray-600">{title}</p>
+        <div className={colorClasses[color] || 'text-gray-500'}>{icon}</div>
       </div>
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-2xl font-bold text-slate-900">{value}</p>
-          <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
+          <p className="text-2xl font-semibold text-gray-900">{value}</p>
+          <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
         </div>
         {trendIcon}
       </div>
@@ -317,20 +337,20 @@ function SubjectCard({ subject, score, trend, mockScore }) {
   )
 
   return (
-    <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+    <div className="bg-gray-50 rounded-lg p-4">
       <div className="flex items-center gap-2 mb-3">
         <div className={`w-2 h-2 rounded-full ${subjectColors[subject.toLowerCase()]}`} />
-        <p className="text-sm font-medium text-slate-900 capitalize">{subject}</p>
+        <p className="text-sm font-medium text-gray-900 capitalize">{subject}</p>
         {trendIcon}
       </div>
       <div className="space-y-1">
         <div className="flex justify-between text-sm">
-          <span className="text-slate-500">Score</span>
-          <span className="font-medium text-slate-900">{score}%</span>
+          <span className="text-gray-500">Score</span>
+          <span className="font-medium text-gray-900">{score}%</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-slate-500">Mock</span>
-          <span className="font-medium text-slate-900">{mockScore}/120</span>
+          <span className="text-gray-500">Mock</span>
+          <span className="font-medium text-gray-900">{mockScore}/120</span>
         </div>
       </div>
     </div>
@@ -340,9 +360,9 @@ function SubjectCard({ subject, score, trend, mockScore }) {
 function WellnessMetric({ label, value, max, type, color }) {
   if (type === 'ratio') {
     return (
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-        <p className="text-sm font-medium text-slate-600 mb-2">{label}</p>
-        <p className="text-lg font-bold text-slate-900">{value}</p>
+      <div className="bg-gray-50 rounded-lg p-4">
+        <p className="text-sm font-medium text-gray-600 mb-2">{label}</p>
+        <p className="text-lg font-semibold text-gray-900">{value}</p>
       </div>
     )
   }
@@ -355,22 +375,22 @@ function WellnessMetric({ label, value, max, type, color }) {
   }
 
   return (
-    <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-      <p className="text-sm font-medium text-slate-600 mb-2">{label}</p>
+    <div className="bg-gray-50 rounded-lg p-4">
+      <p className="text-sm font-medium text-gray-600 mb-2">{label}</p>
       <div className="flex items-center gap-3">
-        <div className="flex-1 bg-slate-200 rounded-full h-2">
+        <div className="flex-1 bg-gray-200 rounded-full h-2">
           <div
             className={`${colorClasses[color]} h-2 rounded-full transition-all`}
             style={{ width: `${percentage}%` }}
           />
         </div>
-        <span className="text-sm font-bold text-slate-900">{value}/{max}</span>
+        <span className="text-sm font-semibold text-gray-900">{value}/{max}</span>
       </div>
     </div>
   )
 }
 
-function ScoreTrendPlaceholder({ data }) {
+function ScoreTrendChart({ data }) {
   const maxScore = Math.max(...data.map(d => d.score))
   const minScore = Math.min(...data.map(d => d.score))
   const range = maxScore - minScore || 1
@@ -382,10 +402,10 @@ function ScoreTrendPlaceholder({ data }) {
         return (
           <div key={index} className="flex-1 flex flex-col items-center gap-2">
             <div
-              className="w-full bg-indigo-500 rounded-t transition-all hover:bg-indigo-600"
+              className="w-full bg-[#6B5CE7] rounded-t transition-all hover:bg-[#5A4BD1]"
               style={{ height: `${height}%` }}
             />
-            <span className="text-xs text-slate-500">{point.test}</span>
+            <span className="text-xs text-gray-500">{point.test}</span>
           </div>
         )
       })}
