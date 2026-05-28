@@ -1,0 +1,37 @@
+{
+  "model_type": "XGBoost",
+  "roc_auc": 0.9915788001106586,
+  "features": [
+    "attendance_rate",
+    "mock_test_avg",
+    "physics_score",
+    "chemistry_score",
+    "maths_score",
+    "mock_score_trend",
+    "assignment_completion_rate",
+    "dpp_accuracy",
+    "test_attempt_rate",
+    "burnout_score",
+    "stress_level",
+    "sleep_hours_avg",
+    "study_hours_per_day",
+    "study_consistency_score",
+    "parental_pressure_level",
+    "peer_comparison_stress",
+    "coaching_engagement_score"
+  ],
+  "n_features": 17,
+  "n_samples_train": 9020,
+  "n_samples_test": 2256,
+  "xgb_cv_roc_auc_mean": 0.9916912896200119,
+  "xgb_cv_roc_auc_std": 0.0010354866893734706,
+  "rf_cv_roc_auc_mean": 0.9835030309585499,
+  "rf_cv_roc_auc_std": 0.0013893916625303798,
+  "test_metrics": {
+    "accuracy": 0.9525709219858156,
+    "precision": 0.9458515283842794,
+    "recall": 0.9601063829787234,
+    "f1": 0.9529256489221294,
+    "roc_auc": 0.9915788001106586
+  }
+}

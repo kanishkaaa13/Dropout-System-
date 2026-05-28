@@ -1,0 +1,19 @@
+[
+  "attendance_rate",
+  "mock_test_avg",
+  "physics_score",
+  "chemistry_score",
+  "maths_score",
+  "mock_score_trend",
+  "assignment_completion_rate",
+  "dpp_accuracy",
+  "test_attempt_rate",
+  "burnout_score",
+  "stress_level",
+  "sleep_hours_avg",
+  "study_hours_per_day",
+  "study_consistency_score",
+  "parental_pressure_level",
+  "peer_comparison_stress",
+  "coaching_engagement_score"
+]
