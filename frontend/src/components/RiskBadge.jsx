@@ -4,7 +4,7 @@ const CONFIG = {
   Low:      { dot: 'bg-emerald-400', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200',  label: 'Low Risk'      },
   Medium:   { dot: 'bg-amber-400',   badge: 'bg-amber-50  text-amber-700  ring-amber-200',       label: 'Medium Risk'   },
   High:     { dot: 'bg-red-400',     badge: 'bg-red-50    text-red-700    ring-red-200',          label: 'High Risk'     },
-  Critical: { dot: 'bg-purple-500',  badge: 'bg-purple-50 text-purple-700 ring-purple-200',      label: 'Critical Risk' },
+  Critical: { dot: 'bg-red-600',     badge: 'bg-red-100   text-red-800    ring-red-300',          label: 'Critical Risk' },
 }
 
 /**

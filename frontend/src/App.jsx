@@ -6,6 +6,8 @@ import StudentLayout from './layouts/StudentLayout'
 
 import Login            from './pages/auth/Login'
 import AdminOverview    from './pages/admin/AdminOverview'
+import AdminAlerts      from './pages/admin/AdminAlerts'
+import AdminAnalytics   from './pages/admin/AdminAnalytics'
 import StudentDetail    from './pages/admin/StudentDetail'
 import StudentList      from './pages/admin/StudentList'
 import AdminChat        from './pages/admin/AdminChat'
@@ -29,6 +31,8 @@ export default function App() {
             <Route element={<DashboardLayout />}>
               <Route path="/admin"               element={<AdminOverview />} />
               <Route path="/admin/students"      element={<StudentList />} />
+              <Route path="/admin/alerts"        element={<AdminAlerts />} />
+              <Route path="/admin/analytics"     element={<AdminAnalytics />} />
               <Route path="/admin/chat"          element={<AdminChat />} />
               <Route path="/students/:id"        element={<StudentDetail />} />
               <Route path="/students/:id/survey" element={<WeeklySurvey />} />
