@@ -203,25 +203,25 @@ export default function StudentDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 transition-colors duration-200">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
               Welcome back, {data.student_name}
             </h1>
-            <p className="text-gray-500 mt-1">
+            <p className="text-gray-500 dark:text-gray-400 mt-1">
               {data.registration_code} • {data.batch}
             </p>
           </div>
           <div className="flex items-center gap-3">
             {/* View Toggle Buttons */}
-            <div className="flex bg-gray-100 rounded-lg p-1">
+            <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 transition-colors duration-200">
               <button
                 onClick={() => setActiveView('dashboard')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 ${
                   activeView === 'dashboard'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 <LayoutDashboard className="w-4 h-4" />
@@ -229,10 +229,10 @@ export default function StudentDashboard() {
               </button>
               <button
                 onClick={() => setActiveView('planner')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 ${
                   activeView === 'planner'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 <BookOpen className="w-4 h-4" />
@@ -240,7 +240,7 @@ export default function StudentDashboard() {
               </button>
             </div>
             {error && (
-              <div className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
+              <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-800">
                 Using offline mode
               </div>
             )}
@@ -274,10 +274,10 @@ export default function StudentDashboard() {
             />
 
             {/* Risk Profile */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
+            <div className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-xl shadow-sm border border-red-100 dark:border-red-800/30 p-5 transition-colors duration-200">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-medium text-gray-600">Risk Profile</p>
-                <Activity className="w-5 h-5 text-gray-400" />
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Risk Profile</p>
+                <Activity className="w-5 h-5 text-red-500" />
               </div>
               <div className="flex items-center justify-between">
                 <RiskBadge level={data.risk_level} size="lg" showLabel />
@@ -285,42 +285,42 @@ export default function StudentDashboard() {
             </div>
 
             {/* Engagement Metrics */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-sm border border-blue-100 dark:border-blue-800/30 p-5 transition-colors duration-200">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-medium text-gray-600">Engagement</p>
-                <Clock className="w-5 h-5 text-gray-400" />
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Engagement</p>
+                <Clock className="w-5 h-5 text-blue-500" />
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Attendance</span>
-                  <span className="font-medium text-gray-900">{data.attendance_rate}%</span>
+                  <span className="text-gray-600 dark:text-gray-400">Attendance</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.attendance_rate}%</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Assignments</span>
-                  <span className="font-medium text-gray-900">{data.assignment_completion}%</span>
+                  <span className="text-gray-600 dark:text-gray-400">Assignments</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{data.assignment_completion}%</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Weekly Goal Card */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl shadow-sm border border-purple-100 dark:border-purple-800/30 p-6 transition-colors duration-200">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-[#6B5CE7]" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 Weekly Study Goal
               </h2>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
                 {data.weekly_study_actual} / {data.weekly_study_target} hours
               </span>
             </div>
-            <div className="relative h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div className="relative h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div
-                className="absolute top-0 left-0 h-full bg-[#6B5CE7] rounded-full transition-all duration-500"
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full transition-all duration-500"
                 style={{ width: `${(data.weekly_study_actual / data.weekly_study_target) * 100}%` }}
               />
             </div>
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
               {data.weekly_study_actual >= data.weekly_study_target 
                 ? "🎉 You've met your weekly study goal!" 
                 : `Keep going! ${data.weekly_study_target - data.weekly_study_actual} more hours to reach your goal.`}
@@ -328,8 +328,8 @@ export default function StudentDashboard() {
           </div>
 
           {/* Academic Analytics */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">Academic Analytics</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 transition-colors duration-200">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">Academic Analytics</h2>
             
             {/* Subject Health */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -346,8 +346,8 @@ export default function StudentDashboard() {
 
             {/* Score Trend */}
             <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-3">Score Trend</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Score Trend</h3>
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 transition-colors duration-200">
                 <ScoreTrendChart data={data.score_trend_data} />
               </div>
             </div>
