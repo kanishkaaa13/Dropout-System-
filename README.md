@@ -259,15 +259,87 @@ jee-dropout/
 
 | Layer        | Technology |
 |--------------|------------|
-| ML           | XGBoost, scikit-learn, SHAP, pandas, numpy |
-| Backend API  | FastAPI, Uvicorn, SQLAlchemy, Alembic |
+| ML           | XGBoost, scikit-learn, SHAP, pandas, numpy, imblearn (SMOTE) |
+| Backend API  | FastAPI, Uvicorn, SQLAlchemy, Alembic, Pydantic |
 | Database     | PostgreSQL (prod), SQLite (dev/test) |
 | Auth         | python-jose (JWT), passlib (bcrypt) |
 | Reports      | fpdf2 (PDF), openpyxl (Excel) |
 | Scheduler    | APScheduler (AsyncIOScheduler) |
-| Frontend     | React 18, Vite, Tailwind CSS v4, Recharts |
-| DevOps       | Docker, Nginx, GitHub Actions, GHCR |
+| Frontend     | React 18, Vite, Tailwind CSS v4, Recharts, PapaParse |
+| DevOps       | Native Windows (no Docker), Nginx, GitHub Actions, GHCR |
 | Testing      | pytest, httpx, unittest.mock |
+| Config       | python-dotenv, .env file configuration |
+
+---
+
+## ⚙️ Environment Configuration
+
+The system uses a centralized `.env` file for configuration. Copy `.env.example` to `.env` and customize:
+
+### Key Configuration Options
+
+```bash
+# Application
+APP_NAME="JEE Dropout Prediction System"
+APP_VERSION="1.0.0"
+ENVIRONMENT="development"
+DEBUG=true
+
+# Database
+DATABASE_URL="sqlite:///./jee_dropout.db"
+
+# Security
+SECRET_KEY="your-secret-key-here"
+ALGORITHM="HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# ML Configuration
+MODEL_DIR="models"
+ARTIFACTS_DIR="artifacts"
+DATA_DIR="data"
+CV_FOLDS=5
+USE_SMOTE=true
+ENABLE_SHAP=true
+SAVE_SHAP_PLOTS=true
+
+# Prediction Thresholds
+DROPOUT_PROBABILITY_THRESHOLD=0.35
+RISK_SCORE_HIGH_THRESHOLD=70
+RISK_SCORE_CRITICAL_THRESHOLD=85
+
+# File Upload
+MAX_UPLOAD_SIZE_MB=10
+ALLOWED_CSV_EXTENSIONS=".csv"
+
+# CORS
+ALLOWED_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
+```
+
+---
+
+## 🧪 Testing
+
+Run the comprehensive pytest suite:
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run specific test files
+pytest tests/test_ml_preprocessing.py -v
+pytest tests/test_model_output.py -v
+pytest tests/test_api_endpoints.py -v
+
+# Run with coverage
+pytest tests/ --cov=backend --cov=ml_training --cov-report=html
+```
+
+### Test Coverage
+
+- **test_ml_preprocessing.py**: Tests for preprocessing pipeline, SMOTE, and feature engineering
+- **test_model_output.py**: Tests for model loading, prediction output, and risk scoring
+- **test_api_endpoints.py**: Tests for health check, authentication, prediction, and error handling
 
 ---
 
