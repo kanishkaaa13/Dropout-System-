@@ -24,7 +24,7 @@ from sklearn.ensemble import RandomForestClassifier
 warnings.filterwarnings('ignore')
 
 # Paths
-DATA_DIR = Path(__file__).parent.parent / 'ml'
+DATA_DIR = Path(__file__).parent.parent / 'data'
 ARTIFACTS_DIR = Path(__file__).parent.parent / 'artifacts'
 ARTIFACTS_DIR.mkdir(exist_ok=True)
 
