@@ -72,14 +72,16 @@ export default function AdminChat() {
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setLoading(true)
-    setUsingFallback(false)
 
     try {
+      console.log('Sending message to backend:', content)
       const response = await api.post('/api/v1/chat', {
         message: content,
         thread_id: activeThread,
         role: 'admin'
       })
+      
+      console.log('Backend response:', response.data)
       
       const assistantMessage = {
         id: Date.now() + 1,
@@ -90,13 +92,30 @@ export default function AdminChat() {
       
       setMessages(prev => [...prev, assistantMessage])
       
-      // Update connection state based on response
+      // Update connection state based on response status
       if (response.data.status === 'offline') {
+        console.log('Backend reported offline mode')
+        setOllamaStatus('offline')
         setUsingFallback(true)
+      } else if (response.data.status === 'online') {
+        console.log('Backend reported online mode, model:', response.data.model_used)
+        setOllamaStatus('online')
+        setUsingFallback(false)
       }
     } catch (err) {
-      console.warn('Chat API unavailable, using offline responses:', err.message)
-      setUsingFallback(true)
+      console.error('Chat API Error Details:', err)
+      console.error('Error response:', err.response)
+      console.error('Error message:', err.message)
+      
+      // Only set to offline if it's a network error or 5xx server error
+      if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK' || 
+          (err.response && err.response.status >= 500)) {
+        console.log('Network error detected, setting offline mode')
+        setOllamaStatus('offline')
+        setUsingFallback(true)
+      } else {
+        console.log('Non-network error, keeping current status')
+      }
       
       // Run offline fallback response
       const fallbackResponse = getOfflineResponse(content)
@@ -420,15 +439,20 @@ export default function AdminChat() {
                 </p>
               </div>
             </div>
-            {usingFallback ? (
+            {ollamaStatus === 'offline' || usingFallback ? (
               <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
                 <AlertCircle className="w-3 h-3" />
                 Offline Mode
               </div>
-            ) : (
+            ) : ollamaStatus === 'online' ? (
               <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
                 AI Online (Ollama)
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></span>
+                Checking...
               </div>
             )}
           </div>
