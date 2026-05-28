@@ -12,12 +12,18 @@ import json
 import joblib
 from pathlib import Path
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, classification_report
-import seaborn as sns
-import matplotlib.pyplot as plt
+
+try:
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    HAS_SEABORN = True
+except ImportError:
+    HAS_SEABORN = False
+    print("WARNING: seaborn/matplotlib not installed. Confusion matrix plot will be skipped.")
 
 # Paths
 ARTIFACTS_DIR = Path(__file__).parent.parent / 'artifacts'
-DATA_DIR = Path(__file__).parent.parent / 'ml'
+DATA_DIR = Path(__file__).parent.parent / 'data'
 DATASET_PATH = DATA_DIR / 'jee_training_data.csv'
 
 print("=" * 80)
@@ -118,18 +124,21 @@ print(f"True Positives:  {cm[1, 1]}")
 print("\n--- Classification Report ---")
 print(classification_report(y, y_pred, target_names=['No Dropout', 'Dropout']))
 
-# Plot confusion matrix
-print("\nGenerating confusion matrix plot...")
-plt.figure(figsize=(8, 6))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-            xticklabels=['No Dropout', 'Dropout'],
-            yticklabels=['No Dropout', 'Dropout'])
-plt.title('Confusion Matrix')
-plt.ylabel('True Label')
-plt.xlabel('Predicted Label')
-plt.tight_layout()
-plt.savefig(ARTIFACTS_DIR / 'confusion_matrix.png', dpi=150, bbox_inches='tight')
-print(f"   Confusion matrix saved to: {ARTIFACTS_DIR / 'confusion_matrix.png'}")
+# Plot confusion matrix (if seaborn is available)
+if HAS_SEABORN:
+    print("\nGenerating confusion matrix plot...")
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=['No Dropout', 'Dropout'],
+                yticklabels=['No Dropout', 'Dropout'])
+    plt.title('Confusion Matrix')
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    plt.tight_layout()
+    plt.savefig(ARTIFACTS_DIR / 'confusion_matrix.png', dpi=150, bbox_inches='tight')
+    print(f"   Confusion matrix saved to: {ARTIFACTS_DIR / 'confusion_matrix.png'}")
+else:
+    print("\nSkipping confusion matrix plot (seaborn not installed)")
 
 print("\n" + "=" * 80)
 print("Evaluation Complete!")
