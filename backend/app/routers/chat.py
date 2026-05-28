@@ -40,18 +40,21 @@ class ChatResponse(BaseModel):
 
 # ── System Prompt Guardrails ─────────────────────────────────────────────────────
 
-def get_system_prompt(role: str = "student") -> str:
+def get_system_prompt(role: str = "student", system_context: Optional[dict] = None) -> str:
     """
-    Generate system prompt based on user role.
+    Generate system prompt based on user role and system context.
     
     Args:
         role: User role (student, faculty, admin)
+        system_context: Additional context (risk score, SHAP features)
     
     Returns:
         System prompt string for Ollama
     """
+    base_prompt = ""
+    
     if role == "student":
-        return """You are an elite, empathetic AI Academic Counselor for a student preparing for the highly competitive JEE exam. 
+        base_prompt = """You are an elite, empathetic AI Academic Counselor for a student preparing for the highly competitive JEE exam. 
 
 Your role is to:
 - Provide structured, encouraging, and clear guidance
@@ -64,7 +67,7 @@ Your role is to:
 Keep responses concise but comprehensive. Use formatting like **bold** for emphasis and bullet points for lists."""
     
     elif role == "faculty":
-        return """You are an AI Faculty Assistant for educators at a JEE coaching institute.
+        base_prompt = """You are an AI Faculty Assistant for educators at a JEE coaching institute.
 
 Your role is to:
 - Help faculty with student analytics and performance insights
@@ -77,7 +80,7 @@ Your role is to:
 Keep responses structured with clear sections and actionable insights."""
     
     elif role == "admin":
-        return """You are a System Operations & Analytics Bot for JEE Predictor system administrators.
+        base_prompt = """You are a System Operations & Analytics Bot for JEE Predictor system administrators.
 
 Your role is to:
 - Provide system diagnostics and operational insights
@@ -90,9 +93,31 @@ Your role is to:
 Use code blocks for system output and tables for structured data."""
     
     else:
-        return """You are a helpful AI assistant for the JEE Dropout Prediction System.
+        base_prompt = """You are a helpful AI assistant for the JEE Dropout Prediction System.
 
 Provide clear, structured responses using Markdown formatting. Be helpful, accurate, and concise."""
+    
+    # Add system context if provided (for student detail page chat)
+    if system_context:
+        risk_score = system_context.get("risk_score")
+        risk_level = system_context.get("risk_level")
+        shap_features = system_context.get("shap_features", [])
+        
+        context_addition = f"""
+
+STUDENT CONTEXT:
+- Dropout Risk Score: {risk_score}/100
+- Risk Level: {risk_level}
+"""
+        if shap_features:
+            context_addition += "- High-Risk Factors: " + ", ".join(shap_features[:5]) + "\n"
+        
+        context_addition += """
+When answering questions about this student, reference their specific risk factors and provide targeted interventions based on their profile. Focus on actionable strategies to address their specific challenges."""
+        
+        return base_prompt + context_addition
+    
+    return base_prompt
 
 
 # ── Ollama Integration ───────────────────────────────────────────────────────────
@@ -151,29 +176,22 @@ async def select_model() -> Optional[str]:
     return None
 
 
-async def call_ollama(message: str, system_prompt: str) -> Optional[tuple[str, str]]:
+async def call_ollama(messages: List[dict], model: str) -> Optional[tuple[str, str]]:
     """
-    Call Ollama API for AI response.
+    Call Ollama API for AI response using /api/chat endpoint.
     
     Args:
-        message: User message
-        system_prompt: System prompt for persona
+        messages: Conversation history as messages array
+        model: Model name to use
     
     Returns:
         Tuple of (response_string, model_name) or (None, None) if Ollama is unavailable
     """
     try:
-        # Select best available model
-        model = await select_model()
-        if not model:
-            logger.error("Ollama connection failed. Reason: No models available")
-            return None, None
-        
-        # Sanitize payload for Ollama API format
-        # Use /api/generate for single prompt (simpler, more reliable)
+        # Use /api/chat endpoint with messages array format
         payload = {
             "model": model,
-            "prompt": f"{system_prompt}\n\nUser: {message}\nAssistant:",
+            "messages": messages,
             "stream": False,
             "options": {
                 "temperature": 0.7,
@@ -182,12 +200,12 @@ async def call_ollama(message: str, system_prompt: str) -> Optional[tuple[str, s
             }
         }
         
-        logger.info(f"Ollama connection attempt: URL={OLLAMA_BASE_URL}/api/generate, Model={model}")
-        logger.info(f"Payload: prompt_length={len(payload['prompt'])}, stream={payload['stream']}")
+        logger.info(f"Ollama connection attempt: URL={OLLAMA_BASE_URL}/api/chat, Model={model}")
+        logger.info(f"Payload: message_count={len(messages)}, stream={payload['stream']}")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{OLLAMA_BASE_URL}/api/generate",
+                f"{OLLAMA_BASE_URL}/api/chat",
                 json=payload
             )
             
@@ -195,7 +213,7 @@ async def call_ollama(message: str, system_prompt: str) -> Optional[tuple[str, s
             
             if response.status_code == 200:
                 data = response.json()
-                response_text = data.get("response", "").strip()
+                response_text = data.get("message", {}).get("content", "").strip()
                 logger.info(f"Ollama response received successfully. Response length: {len(response_text)}")
                 return response_text, model
             else:
@@ -469,7 +487,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     Falls back to local keyword-based responses if Ollama is unavailable.
     
     Args:
-        request: Chat request with message and optional thread_id
+        request: Chat request with message, messages array, and optional system_context
         http_request: FastAPI request object
     
     Returns:
@@ -478,11 +496,40 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     # Get user role from request or default to student
     role = request.role or "student"
     
-    # Generate system prompt based on role
-    system_prompt = get_system_prompt(role)
+    # Generate system prompt based on role and system context
+    system_prompt = get_system_prompt(role, request.system_context)
+    
+    # Build messages array for conversation history
+    messages = request.messages or []
+    
+    # If no messages provided, start fresh with system prompt
+    if not messages:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": request.message}
+        ]
+    else:
+        # Ensure system prompt is first message
+        if messages[0].get("role") != "system":
+            messages.insert(0, {"role": "system", "content": system_prompt})
+        # Add user message
+        messages.append({"role": "user", "content": request.message})
+    
+    # Select best available model
+    model = await select_model()
+    if not model:
+        logger.error("Ollama connection failed. Reason: No models available")
+        # Use fallback
+        fallback_response = get_fallback_response(request.message, role)
+        return ChatResponse(
+            response=fallback_response,
+            using_ollama=False,
+            status="offline",
+            model_used=None
+        )
     
     # Try to call Ollama
-    ollama_response, model_used = await call_ollama(request.message, system_prompt)
+    ollama_response, model_used = await call_ollama(messages, model)
     
     if ollama_response:
         logger.info(f"Successfully called Ollama for role={role}, model={model_used}")
