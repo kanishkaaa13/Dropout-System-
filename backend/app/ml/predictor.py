@@ -104,51 +104,95 @@ class JEEDropoutPredictor:
         """
         Load all serialised artefacts from ``model_dir``.
 
+        Supports both old structure (preprocessor.pkl, xgb_model.pkl, etc.)
+        and new structure (model.pkl, scaler.pkl, features.json).
+
         Raises
         ------
         FileNotFoundError
             If any expected .pkl file is missing.
         """
-        paths = {
-            "preprocessor": os.path.join(self.model_dir, "preprocessor.pkl"),
-            "xgb":          os.path.join(self.model_dir, "xgb_model.pkl"),
-            "rf":           os.path.join(self.model_dir, "rf_model.pkl"),
-            "lr":           os.path.join(self.model_dir, "lr_model.pkl"),
-            "metadata":     os.path.join(self.model_dir, "metadata.json"),
-        }
+        # Check for new artifact structure (model.pkl, scaler.pkl, features.json)
+        new_structure = os.path.exists(os.path.join(self.model_dir, "model.pkl"))
+        
+        if new_structure:
+            # Load new structure
+            model_path = os.path.join(self.model_dir, "model.pkl")
+            scaler_path = os.path.join(self.model_dir, "scaler.pkl")
+            features_path = os.path.join(self.model_dir, "features.json")
+            metadata_path = os.path.join(self.model_dir, "metadata.json")
 
-        for key, path in paths.items():
-            if not os.path.exists(path):
-                raise FileNotFoundError(
-                    f"[JEEDropoutPredictor] Missing artefact: {path}"
-                )
+            for path in [model_path, scaler_path, features_path]:
+                if not os.path.exists(path):
+                    raise FileNotFoundError(
+                        f"[JEEDropoutPredictor] Missing artefact: {path}"
+                    )
 
-        self._preprocessor = joblib.load(paths["preprocessor"])
-        self._xgb_model    = joblib.load(paths["xgb"])
-        self._rf_model     = joblib.load(paths["rf"])
-        self._lr_model     = joblib.load(paths["lr"])
+            # Load single best model
+            self._xgb_model = joblib.load(model_path)
+            self._rf_model = self._xgb_model  # Use same model for RF
+            self._lr_model = self._xgb_model  # Use same model for LR
+            self._preprocessor = joblib.load(scaler_path)
 
-        with open(paths["metadata"], encoding="utf-8") as f:
-            self._metadata = json.load(f)
+            # Load feature names from features.json
+            with open(features_path, encoding="utf-8") as f:
+                self._feature_cols = json.load(f)
 
-        # Resolve active feature columns from metadata (supports both pipelines)
-        if "feature_cols" in self._metadata:
-            self._feature_cols = self._metadata["feature_cols"]
-        elif "numeric_features" in self._metadata and "categorical_features" in self._metadata:
-            self._feature_cols = (
-                self._metadata["numeric_features"]
-                + self._metadata["categorical_features"]
-            )
-        else:
-            self._feature_cols = FEATURE_COLS  # fallback to synthetic
+            # Load metadata if available
+            if os.path.exists(metadata_path):
+                with open(metadata_path, encoding="utf-8") as f:
+                    self._metadata = json.load(f)
+            else:
+                self._metadata = {
+                    "version": "1.0.0",
+                    "dataset": "jee_training_data",
+                    "model_type": type(self._xgb_model).__name__
+                }
 
-        # Detect pipeline type
-        self._pipeline = self._metadata.get("dataset", "synthetic")
-        if "JEE_Dropout_After" in self._pipeline or "real" in self._pipeline.lower():
             self._pipeline = "real"
-            self.threshold = self._metadata.get("threshold", 0.30)
+            self.threshold = self._metadata.get("test_metrics", {}).get("roc_auc", 0.5)
         else:
-            self._pipeline = "synthetic"
+            # Load old structure (preprocessor.pkl, xgb_model.pkl, rf_model.pkl, lr_model.pkl)
+            paths = {
+                "preprocessor": os.path.join(self.model_dir, "preprocessor.pkl"),
+                "xgb":          os.path.join(self.model_dir, "xgb_model.pkl"),
+                "rf":           os.path.join(self.model_dir, "rf_model.pkl"),
+                "lr":           os.path.join(self.model_dir, "lr_model.pkl"),
+                "metadata":     os.path.join(self.model_dir, "metadata.json"),
+            }
+
+            for key, path in paths.items():
+                if not os.path.exists(path):
+                    raise FileNotFoundError(
+                        f"[JEEDropoutPredictor] Missing artefact: {path}"
+                    )
+
+            self._preprocessor = joblib.load(paths["preprocessor"])
+            self._xgb_model    = joblib.load(paths["xgb"])
+            self._rf_model     = joblib.load(paths["rf"])
+            self._lr_model     = joblib.load(paths["lr"])
+
+            with open(paths["metadata"], encoding="utf-8") as f:
+                self._metadata = json.load(f)
+
+            # Resolve active feature columns from metadata (supports both pipelines)
+            if "feature_cols" in self._metadata:
+                self._feature_cols = self._metadata["feature_cols"]
+            elif "numeric_features" in self._metadata and "categorical_features" in self._metadata:
+                self._feature_cols = (
+                    self._metadata["numeric_features"]
+                    + self._metadata["categorical_features"]
+                )
+            else:
+                self._feature_cols = FEATURE_COLS  # fallback to synthetic
+
+            # Detect pipeline type
+            self._pipeline = self._metadata.get("dataset", "synthetic")
+            if "JEE_Dropout_After" in self._pipeline or "real" in self._pipeline.lower():
+                self._pipeline = "real"
+                self.threshold = self._metadata.get("threshold", 0.30)
+            else:
+                self._pipeline = "synthetic"
 
         # SHAP TreeExplainer on XGBoost
         self._shap_explainer = shap.TreeExplainer(self._xgb_model)
