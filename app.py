@@ -19,7 +19,7 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production-2025'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
-CORS(app)
+CORS(app, origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:8000"], supports_credentials=True)
 
 # Create directories
 for folder in ['uploads', 'reports', 'logs']:
@@ -886,6 +886,16 @@ def chatbot():
     })
     
     return jsonify({'response': response})
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for frontend connection testing"""
+    return jsonify({
+        'status': 'ok',
+        'timestamp': datetime.now().isoformat(),
+        'service': 'Student Dropout Prediction System',
+        'version': '1.0.0'
+    })
 
 # ==================== RUN APPLICATION ====================
 
