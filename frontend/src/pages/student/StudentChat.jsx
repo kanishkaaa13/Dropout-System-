@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import api from '../../api/axiosConfig'
-import { Send, Bot, User, Clock, AlertCircle, PaperPlane } from 'lucide-react'
+import { Send, Bot, User, Clock, AlertCircle } from 'lucide-react'
 
 export default function StudentChat() {
   const navigate = useNavigate()
@@ -389,7 +389,7 @@ export default function StudentChat() {
               {loading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
               ) : (
-                <PaperPlane className="w-5 h-5" />
+                <Send className="w-5 h-5" />
               )}
             </button>
           </form>
