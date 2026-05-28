@@ -50,29 +50,40 @@ export default function AdminOverview() {
   const [data, setData]     = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState(null)
+  const [isConnected, setIsConnected] = useState(false)
 
-  useEffect(() => {
+  const fetchData = () => {
+    setLoading(true)
+    setError(null)
     api.get('/analytics/institute/overview')
-      .then(({ data }) => setData(data))
-      .catch(() => {
-        // Fallback mock so the UI is always visible in dev
-        setData({
-          total_students: 20,
-          high_risk_count: 6,
-          unresolved_alerts: 5,
-          avg_mock_score: 182.4,
-          risk_distribution: [
-            { level: 'Low', count: 14 },
-            { level: 'Medium', count: 0 },
-            { level: 'High', count: 1 },
-            { level: 'Critical', count: 5 },
-          ],
-          top_at_risk: [],
-          batch_comparison: [],
-        })
-        setError('Using mock data — backend not reachable')
+      .then(({ data }) => {
+        setData(data)
+        setIsConnected(true)
+      })
+      .catch((err) => {
+        console.error('API Error:', err)
+        setError('Backend offline — retrying...')
+        setIsConnected(false)
+        setData(null)
       })
       .finally(() => setLoading(false))
+  }
+
+  const checkHealth = () => {
+    api.get('/health')
+      .then(() => {
+        setIsConnected(true)
+        setError(null)
+        fetchData()
+      })
+      .catch(() => {
+        setError('Backend offline — retrying...')
+        setIsConnected(false)
+      })
+  }
+
+  useEffect(() => {
+    fetchData()
   }, [])
 
   const riskDist = (data?.risk_distribution || []).map((r) => ({
@@ -85,14 +96,28 @@ export default function AdminOverview() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Institute Overview</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Real-time dropout risk dashboard</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Institute Overview</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Real-time dropout risk dashboard</p>
+        </div>
+        {isConnected && (
+          <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-1.5 rounded-lg">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            Connected
+          </div>
+        )}
       </div>
 
       {error && (
-        <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm px-4 py-3">
-          ⚠ {error}
+        <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 flex items-center justify-between">
+          <span>⚠ {error}</span>
+          <button
+            onClick={checkHealth}
+            className="ml-4 px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium"
+          >
+            Retry Connection
+          </button>
         </div>
       )}
 
