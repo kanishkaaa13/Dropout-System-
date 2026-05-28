@@ -3,7 +3,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import api from '../../api/axiosConfig'
 import RiskBadge from '../../components/RiskBadge'
 import StudentChatPanel from '../../components/StudentChatPanel'
-import { TrendingUp, TrendingDown, Activity, Clock, Target, Award } from 'lucide-react'
+import CreativePlanner from '../../components/CreativePlanner'
+import { TrendingUp, TrendingDown, Activity, Clock, Target, Award, LayoutDashboard } from 'lucide-react'
 
 export default function StudentDashboard() {
   const { user } = useAuth()
@@ -11,6 +12,7 @@ export default function StudentDashboard() {
   const [dashboardData, setDashboardData] = useState(null)
   const [error, setError] = useState(null)
   const [shapFeatures, setShapFeatures] = useState([])
+  const [activeView, setActiveView] = useState('dashboard') // 'dashboard' or 'planner'
 
   useEffect(() => {
     fetchDashboardData()
