@@ -166,6 +166,7 @@ class Student(Base):
     target_rank:         Mapped[int | None]     = mapped_column(Integer)
     target_college:      Mapped[str | None]     = mapped_column(String(200))
     is_active:           Mapped[bool]           = mapped_column(Boolean, nullable=False, default=True)
+    is_demo:             Mapped[bool]           = mapped_column(Boolean, nullable=False, default=False, index=True)
 
     # ── Real-dataset profile fields (JEE Dropout After Class 12) ─────────────
     jee_main_score:          Mapped[float | None]  = mapped_column(Float)              # 0–100 percentile
