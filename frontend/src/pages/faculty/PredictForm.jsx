@@ -5,7 +5,7 @@ import RiskGauge from '../../components/RiskGauge'
 import ShapChart from '../../components/ShapChart'
 import RiskBadge from '../../components/RiskBadge'
 import clsx from 'clsx'
-import { Send, ChevronDown, ChevronUp } from 'lucide-react'
+import { Send, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 
 // ── Slider input ─────────────────────────────────────────────────────────────
 function SliderField({ label, id, name, value, min = 1, max = 10, step = 1, onChange, hint }) {
@@ -186,8 +186,17 @@ export default function PredictForm() {
           disabled={loading}
           className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold px-8 py-3 rounded-xl transition-colors"
         >
-          <Send className="w-4 h-4" />
-          {loading ? 'Running prediction…' : 'Run Prediction'}
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Running prediction…
+            </>
+          ) : (
+            <>
+              <Send className="w-4 h-4" />
+              Run Prediction
+            </>
+          )}
         </button>
       </form>
 

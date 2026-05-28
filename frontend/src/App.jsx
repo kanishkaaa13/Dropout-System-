@@ -66,7 +66,7 @@ export default function App() {
               <Route element={<RequireAuth allowedRoles={['faculty']} />}>
                 <Route element={<DashboardLayout />}>
                   <Route path="/faculty"             element={<StudentList facultyOnly />} />
-                  <Route path="/faculty/predict"     element={<PredictForm />} />
+                  <Route path="/faculty/predict"     element={<ErrorBoundary><PredictForm /></ErrorBoundary>} />
                   <Route path="/faculty/chat"        element={<FacultyChat />} />
                   <Route path="/faculty/students/:id" element={<StudentDetail />} />
                 </Route>
