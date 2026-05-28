@@ -232,6 +232,34 @@ def seed_users(db, institute: Institute) -> tuple[User, User, User]:
     return tuple(users)   # (admin, faculty1, faculty2)
 
 
+def seed_student_users(db, institute: Institute, students: list[Student]) -> list[User]:
+    """Create User accounts for students so they can log in to the Student Portal."""
+    student_users = []
+    
+    for idx, student in enumerate(students):
+        # Create student email for login (different from the record email)
+        student_email = f"student{idx+1}@demojee.com"
+        student_password = "Student@1234"
+        
+        # Check if user already exists
+        u = db.query(User).filter_by(email=student_email).first()
+        if not u:
+            u = User(
+                email=student_email,
+                full_name=student.full_name,
+                role="student",
+                institute_id=institute.id,
+                hashed_password=hash_password(student_password),
+                is_active=True,
+            )
+            db.add(u)
+            db.flush()
+            log.info("Created Student User: %s (%s)", u.full_name, u.email)
+        student_users.append(u)
+    
+    return student_users
+
+
 def seed_students(
     db,
     batches: list[Batch],
@@ -499,34 +527,41 @@ def main() -> None:
         # 4. Students
         students = seed_students(db, batches, (faculty1, faculty2))
 
-        # 5. Mock tests
+        # 5. Student Users (for login)
+        student_users = seed_student_users(db, institute, students)
+
+        # 6. Mock tests
         seed_mock_tests(db, students)
 
-        # 6. Surveys
+        # 7. Surveys
         seed_surveys(db, students)
 
-        # 7. Attendance
+        # 8. Attendance
         seed_attendance(db, students)
 
         db.commit()
         log.info("Core seed data committed.")
 
-        # 8. ML Predictions (separate commit per student)
+        # 9. ML Predictions (separate commit per student)
         seed_predictions(db, students)
         db.commit()
         log.info("Predictions committed.")
 
         log.info("=" * 60)
         log.info("Seed complete!")
-        log.info("  Institute : 1")
-        log.info("  Batches   : %d", len(batches))
-        log.info("  Users     : 3 (1 admin + 2 faculty)")
-        log.info("  Students  : %d", len(students))
+        log.info("  Institute     : 1")
+        log.info("  Batches       : %d", len(batches))
+        log.info("  Users         : 3 (1 admin + 2 faculty)")
+        log.info("  Student Users : %d", len(student_users))
+        log.info("  Students      : %d", len(students))
         log.info("")
         log.info("Login credentials:")
         log.info("  admin@demojee.com    / Admin@1234")
         log.info("  faculty1@demojee.com / Faculty@1234")
         log.info("  faculty2@demojee.com / Faculty@1234")
+        log.info("  student1@demojee.com / Student@1234")
+        log.info("  student2@demojee.com / Student@1234")
+        log.info("  ... (student3@demojee.com through student20@demojee.com)")
         log.info("=" * 60)
 
     except Exception as exc:

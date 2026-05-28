@@ -15,7 +15,8 @@ export default function Login() {
 
   // If already logged in, redirect
   if (isAuthenticated) {
-    return <Navigate to={role === 'admin' ? '/admin' : '/faculty'} replace />
+    const redirectPath = role === 'admin' ? '/admin' : role === 'student' ? '/student/dashboard' : '/faculty'
+    return <Navigate to={redirectPath} replace />
   }
 
   const handleSubmit = async (e) => {
@@ -24,9 +25,17 @@ export default function Login() {
     setError(null)
     try {
       const me = await login(email, password)
-      navigate(me.role === 'admin' ? '/admin' : '/faculty', { replace: true })
+      const redirectPath = me.role === 'admin' ? '/admin' : me.role === 'student' ? '/student/dashboard' : '/faculty'
+      navigate(redirectPath, { replace: true })
     } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid credentials')
+      const detail = err.response?.data?.detail
+      setError(
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map(d => d.msg || JSON.stringify(d)).join(', ')
+            : 'Invalid credentials'
+      )
     } finally {
       setLoading(false)
     }
@@ -105,6 +114,7 @@ export default function Login() {
             <div className="space-y-1.5 text-xs text-slate-400 text-center">
               <p>admin@demojee.com / Admin@1234</p>
               <p>faculty1@demojee.com / Faculty@1234</p>
+              <p>student1@demojee.com / Student@1234</p>
             </div>
           </div>
         </div>
