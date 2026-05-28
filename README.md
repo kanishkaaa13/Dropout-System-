@@ -78,29 +78,57 @@ The **JEE Dropout Prediction System** helps coaching institutes like Allen, Aaka
 
 ---
 
-## 🚀 Quick Start (Docker)
+## 🚀 Quick Start (Native Windows - No Docker)
 
-> **Prerequisite**: Docker Desktop installed and running.
+> **Prerequisites**: Python 3.11+, Node.js 18+, pip, npm
+
+### Backend Setup
 
 ```bash
 # 1. Clone the repo
 git clone https://github.com/YOUR_USERNAME/jee-dropout.git
 cd jee-dropout
 
-# 2. Set up environment files
-make setup
+# 2. Create virtual environment
+python -m venv venv
+venv\Scripts\activate
 
-# 3. Train ML models
-make train
+# 3. Install Python dependencies
+pip install -r requirements.txt
 
-# 4. Start everything
-make dev
+# 4. Set up environment file
+copy .env.example .env
+# Edit .env with your configuration
 
-# 5. Seed demo data
-make seed
+# 5. Train ML models with 5-fold CV, SMOTE, and SHAP
+python ml_training/train.py
+
+# 6. Seed demo data
+python backend/app/utils/db_seed.py
+
+# 7. Start backend server
+python -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Open **http://localhost** — the full system is running.
+### Frontend Setup
+
+```bash
+# In a new terminal
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+### Access the Application
+
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/api/docs
+- **Health Check**: http://localhost:8000/health
 
 ---
 
