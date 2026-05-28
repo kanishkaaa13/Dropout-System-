@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { DemoProvider } from './contexts/DemoContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { RequireAuth } from './components/RequireAuth'
+import ErrorBoundary from './components/ErrorBoundary'
 import DashboardLayout from './layouts/DashboardLayout'
 import StudentLayout from './layouts/StudentLayout'
 

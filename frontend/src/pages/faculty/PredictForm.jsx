@@ -198,12 +198,12 @@ export default function PredictForm() {
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col items-center justify-center lg:col-span-2">
-              <RiskGauge score={result.risk_score} level={result.risk_level} size={220} />
+              <RiskGauge score={result?.risk_score ?? 0} level={result?.risk_level ?? 'Low'} size={220} />
               <div className="mt-3">
-                <RiskBadge level={result.risk_level} size="lg" showLabel />
+                <RiskBadge level={result?.risk_level ?? 'Low'} size="lg" showLabel />
               </div>
               <p className="text-xs text-slate-500 text-center mt-3 leading-relaxed">
-                ML probability: {(result.ml_probability * 100).toFixed(1)}%
+                ML probability: {result?.ml_probability ? ((result.ml_probability * 100).toFixed(1)) + '%' : 'N/A'}
               </p>
             </div>
 
@@ -216,12 +216,14 @@ export default function PredictForm() {
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h3 className="font-semibold text-slate-800 mb-3 text-sm">💡 Counsellor Recommendations</h3>
             <ul className="space-y-2">
-              {recs.map((r, i) => (
+              {recs.length > 0 ? recs.map((r, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
                   <span className="text-indigo-500 mt-0.5 shrink-0">→</span>
                   {r}
                 </li>
-              ))}
+              )) : (
+                <li className="text-sm text-slate-500">No recommendations available for this risk level.</li>
+              )}
             </ul>
           </div>
         </div>
