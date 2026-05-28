@@ -509,3 +509,48 @@ class BlacklistedToken(Base):
 
     def __repr__(self) -> str:
         return f"<BlacklistedToken id={self.id} jti={self.token_jti[:12]}… exp={self.expires_at!s:.19}>"
+
+
+# ─── PredictionLog ─────────────────────────────────────────────────────────────
+
+class PredictionLog(Base):
+    """
+    Immutable log of all ML predictions made through the API.
+
+    Used for auditing, analytics, and debugging model performance over time.
+    """
+
+    __tablename__ = "prediction_logs"
+
+    id:                 Mapped[int]            = mapped_column(Integer, primary_key=True, index=True)
+    student_id:         Mapped[int]            = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id:            Mapped[int]            = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=False, index=True)
+    user_role:          Mapped[str]            = mapped_column(String(20), nullable=False)
+    risk_score:         Mapped[float]          = mapped_column(Float, nullable=False)
+    risk_level:         Mapped[str]            = mapped_column(String(20), nullable=False, index=True)
+    ml_probability:     Mapped[float]          = mapped_column(Float, nullable=False)
+    model_version:      Mapped[str]            = mapped_column(String(50), nullable=False)
+    inference_time_ms:  Mapped[float]          = mapped_column(Float, nullable=False)
+    feature_snapshot:   Mapped[dict | None]    = mapped_column(JSON)
+    timestamp:          Mapped[datetime]       = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False,
+        index=True,
+    )
+
+    __table_args__ = (
+        Index("ix_prediction_logs_student_ts", "student_id", "timestamp"),
+        Index("ix_prediction_logs_user_ts", "user_id", "timestamp"),
+        Index("ix_prediction_logs_risk_level", "risk_level"),
+    )
+
+    # Relationships
+    student: Mapped[Student] = relationship("Student", foreign_keys=[student_id])
+    user:    Mapped[User]    = relationship("User", foreign_keys=[user_id])
+
+    def __repr__(self) -> str:
+        return (
+            f"<PredictionLog id={self.id} student_id={self.student_id} "
+            f"risk={self.risk_level!r} score={self.risk_score:.1f}>"
+        )

@@ -79,7 +79,7 @@ def _latest_assessment_or_404(student_id: int, db: Session) -> RiskAssessment:
     status_code=status.HTTP_200_OK,
     summary="Run full dropout prediction pipeline for one student",
 )
-def predict_student(
+async def predict_student(
     student_id:   int,
     request:      Request,
     current_user: User    = Depends(get_faculty_or_admin),
@@ -94,7 +94,8 @@ def predict_student(
     4. Generate real SHAP explanations
     5. Persist RiskAssessment + ShapExplanation to the database
     6. Create an Alert if risk level >= Medium
-    7. Return the full PredictionResponse
+    7. Log prediction to prediction_logs table
+    8. Return the full PredictionResponse
 
     Faculty can only predict for their assigned students.
     """
@@ -200,12 +201,35 @@ def predict_student(
 
     db.commit()
 
+    # ── Step 7: Log prediction to prediction_logs table ─────────────────────
+    try:
+        from backend.app.models.database import PredictionLog
+        
+        prediction_log = PredictionLog(
+            student_id=student_id,
+            user_id=current_user.id,
+            user_role=current_user.role,
+            risk_score=risk["score"],
+            risk_level=risk["level"],
+            ml_probability=pred["ensemble_probability"],
+            model_version=pred["model_version"],
+            inference_time_ms=pred["inference_time_ms"],
+            feature_snapshot=features_dict,
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(prediction_log)
+        db.commit()
+        logger.info(f"Prediction logged for student_id={student_id}")
+    except Exception as exc:
+        logger.error(f"Failed to log prediction: {exc}")
+        # Don't fail the prediction if logging fails
+
     logger.info(
         "Prediction complete: student_id=%d  risk=%s (%.1f)  alert=%s",
         student_id, risk["level"], risk["score"], alert_created,
     )
 
-    # ── Step 7: Build response ────────────────────────────────────────────────
+    # ── Step 8: Build response ────────────────────────────────────────────────
     top_factors = [FeatureImpact(**f) for f in explanation["top_factors"]]
     components  = RiskComponents(**risk["components"])
 
@@ -236,7 +260,7 @@ def predict_student(
     status_code=status.HTTP_200_OK,
     summary="Get the latest SHAP explanation for a student",
 )
-def get_explanation(
+async def get_explanation(
     student_id:   int,
     current_user: User    = Depends(get_faculty_or_admin),
     db:           Session = Depends(get_db),
@@ -277,7 +301,7 @@ def get_explanation(
     status_code=status.HTTP_200_OK,
     summary="Get the SHAP waterfall plot (base64 PNG) for a student",
 )
-def get_shap_plot(
+async def get_shap_plot(
     student_id:   int,
     current_user: User    = Depends(get_faculty_or_admin),
     db:           Session = Depends(get_db),

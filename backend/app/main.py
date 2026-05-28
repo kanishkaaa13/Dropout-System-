@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import AsyncIterator
 
 from fastapi import FastAPI, Request, status
@@ -23,6 +25,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.app.config import settings
+
+# ── Application Start Time for Uptime Calculation ───────────────────────────
+
+APP_START_TIME = time.time()
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -200,16 +206,32 @@ def create_app() -> FastAPI:
     app.include_router(reports_router,    prefix=API_PREFIX)
     app.include_router(chat_router,       prefix=API_PREFIX)
 
-    # ── Health check ─────────────────────────────────────────────────────────
+    # ── Health check with uptime and model version ───────────────────────────────
 
     @app.get("/health", tags=["System"], include_in_schema=False)
     async def health_check(request: Request) -> dict:
         predictor = getattr(request.app.state, "predictor", None)
+        uptime_seconds = time.time() - APP_START_TIME
+        uptime_hours = uptime_seconds / 3600
+        
+        model_info = {}
+        if predictor is not None and predictor.is_loaded:
+            model_info = {
+                "model_version": predictor.metadata.get("version", "unknown"),
+                "pipeline": predictor.pipeline,
+                "n_features": predictor.metadata.get("n_features", 0),
+                "threshold": predictor.metadata.get("threshold", 0.5),
+                "trained_at": predictor.metadata.get("trained_at", "unknown"),
+            }
+        
         return {
             "status": "ok",
             "version": settings.APP_VERSION,
             "environment": settings.ENVIRONMENT,
+            "uptime_seconds": round(uptime_seconds, 2),
+            "uptime_hours": round(uptime_hours, 2),
             "ml_models_loaded": predictor is not None and predictor.is_loaded,
+            "model_info": model_info,
         }
 
     @app.get("/", tags=["System"], include_in_schema=False)
