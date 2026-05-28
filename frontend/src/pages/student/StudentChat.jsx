@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -28,28 +28,38 @@ export default function StudentChat() {
     scrollToBottom()
   }, [messages])
 
-  // Check Ollama status on mount
-  useEffect(() => {
-    const checkOllamaStatus = async () => {
-      try {
-        const response = await api.get('/api/v1/chat/status')
-        console.log('Ollama status check:', response.data)
-        if (response.data.ollama_available) {
-          setOllamaStatus('online')
-          setUsingFallback(false)
-        } else {
-          setOllamaStatus('offline')
-          setUsingFallback(true)
-        }
-      } catch (err) {
-        console.error('Ollama status check failed:', err)
+  // Independent Ollama status check - decoupled from message pipeline
+  const checkOllamaStatus = useCallback(async () => {
+    try {
+      console.log('Checking Ollama status...')
+      const response = await api.get('/chat/status')
+      console.log('Ollama status check response:', response.data)
+      if (response.data.ollama_available) {
+        setOllamaStatus('online')
+        setUsingFallback(false)
+        console.log('Ollama is online, model:', response.data.selected_model)
+      } else {
+        setOllamaStatus('offline')
+        setUsingFallback(true)
+        console.log('Ollama is offline')
+      }
+    } catch (err) {
+      console.error('Ollama status check failed:', err)
+      // Only set to offline if it's a network error
+      if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK') {
         setOllamaStatus('offline')
         setUsingFallback(true)
       }
+      // Otherwise keep current status
     }
-
-    checkOllamaStatus()
   }, [])
+
+  // Check Ollama status on mount and every 30 seconds
+  useEffect(() => {
+    checkOllamaStatus()
+    const interval = setInterval(checkOllamaStatus, 30000) // Poll every 30 seconds
+    return () => clearInterval(interval)
+  }, [checkOllamaStatus])
 
   const quickActions = [
     'How do I optimize my Chemistry score?',
@@ -75,7 +85,7 @@ export default function StudentChat() {
 
     try {
       console.log('Sending message to backend:', content)
-      const response = await api.post('/api/v1/chat', {
+      const response = await api.post('/chat', {
         message: content,
         thread_id: activeThread,
         role: 'student'
@@ -108,7 +118,7 @@ export default function StudentChat() {
       console.error('Error response:', err.response)
       console.error('Error message:', err.message)
       
-      // Only set to offline if it's a network error or 5xx server error
+      // Only set to offline if it's a legitimate network disconnect error
       if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK' || 
           (err.response && err.response.status >= 500)) {
         console.log('Network error detected, setting offline mode')
@@ -116,6 +126,7 @@ export default function StudentChat() {
         setUsingFallback(true)
       } else {
         console.log('Non-network error, keeping current status')
+        // Do NOT toggle the main status variable for non-network errors
       }
       
       // Run offline fallback response

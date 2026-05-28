@@ -32,7 +32,7 @@ export default function FacultyChat() {
   useEffect(() => {
     const checkOllamaStatus = async () => {
       try {
-        const response = await api.get('/api/v1/chat/status')
+        const response = await api.get('/chat/status')
         console.log('Ollama status check:', response.data)
         if (response.data.ollama_available) {
           setOllamaStatus('online')
@@ -75,7 +75,7 @@ export default function FacultyChat() {
 
     try {
       console.log('Sending message to backend:', content)
-      const response = await api.post('/api/v1/chat', {
+      const response = await api.post('/chat', {
         message: content,
         thread_id: activeThread,
         role: 'faculty'

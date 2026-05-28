@@ -2,7 +2,7 @@
 train.py
 --------
 JEE Aspirant Dropout Prediction System -- Phase 1
-Production-grade ML training pipeline
+Production-grade ML training pipeline with 5-fold CV, SMOTE, and SHAP explainability
 
 Models trained
 --------------
@@ -10,7 +10,12 @@ Models trained
   2. RandomForest      (secondary -- class_weight='balanced')
   3. LogisticRegression (baseline)
 
-Ensemble weights  ->  XGB x0.55 + RF x0.35 + LR x0.10
+Features
+--------
+  - 5-fold stratified cross-validation
+  - SMOTE for class imbalance handling
+  - SHAP explainability (summary + waterfall plots)
+  - Model comparison with detailed metrics
 
 Output artefacts (models/)
 --------------------------
@@ -19,6 +24,8 @@ Output artefacts (models/)
   rf_model.pkl      -- trained RandomForestClassifier
   lr_model.pkl      -- trained LogisticRegression
   metadata.json     -- feature list, AUC, version, training date
+  shap_summary.png -- SHAP summary plot
+  shap_waterfall.png -- SHAP waterfall plot for sample prediction
 
 Run
 ---
@@ -35,10 +42,14 @@ import sys
 import time
 import warnings
 from datetime import datetime
+from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
+import shap
+import matplotlib.pyplot as plt
+from dotenv import load_dotenv
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
@@ -52,25 +63,34 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
+from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
+from imblearn.over_sampling import SMOTE
 
 import xgboost as xgb
 
 warnings.filterwarnings("ignore")
 
+# Load environment variables
+load_dotenv()
+
 # ---------------------------------------------------------------------------
-# Constants
+# Constants from .env
 # ---------------------------------------------------------------------------
 
-SEED         = 42
-N_SAMPLES    = 8_000
-THRESHOLD    = 0.35        # Recall-optimised threshold for early intervention
-MODEL_DIR    = os.path.join(os.path.dirname(__file__), "..", "models")
-DATA_DIR     = os.path.join(os.path.dirname(__file__), "..", "data")
-DATA_CSV     = os.path.join(DATA_DIR, "jee_training_data.csv")
-VERSION      = "1.0.0"
+SEED = 42
+N_SAMPLES = int(os.getenv("N_SAMPLES", 8000))
+THRESHOLD = float(os.getenv("DROPOUT_PROBABILITY_THRESHOLD", 0.35))
+MODEL_DIR = Path(os.getenv("MODEL_DIR", "models"))
+ARTIFACTS_DIR = Path(os.getenv("ARTIFACTS_DIR", "artifacts"))
+DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
+DATA_CSV = DATA_DIR / "jee_training_data.csv"
+VERSION = os.getenv("APP_VERSION", "1.0.0")
+CV_FOLDS = int(os.getenv("CV_FOLDS", 5))
+USE_SMOTE = os.getenv("USE_SMOTE", "true").lower() == "true"
+ENABLE_SHAP = os.getenv("ENABLE_SHAP", "true").lower() == "true"
+SAVE_SHAP_PLOTS = os.getenv("SAVE_SHAP_PLOTS", "true").lower() == "true"
 
 FEATURE_COLS = [
     "attendance_rate",
@@ -273,8 +293,31 @@ def build_preprocessor() -> Pipeline:
 
 
 # ---------------------------------------------------------------------------
-# Step 3 -- Model training
+# Step 3 -- Model training with 5-fold CV and SMOTE
 # ---------------------------------------------------------------------------
+
+def apply_smote(X_train: np.ndarray, y_train: np.ndarray) -> tuple:
+    """Apply SMOTE for class imbalance handling."""
+    if not USE_SMOTE:
+        print("  [SMOTE] SMOTE disabled (USE_SMOTE=false)")
+        return X_train, y_train
+    
+    print("  [SMOTE] Applying SMOTE for class imbalance...")
+    smote = SMOTE(
+        sampling_strategy='auto',
+        random_state=SEED,
+        k_neighbors=5
+    )
+    X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
+    
+    original_neg, original_pos = np.bincount(y_train)
+    resampled_neg, resampled_pos = np.bincount(y_resampled)
+    
+    print(f"  [SMOTE] Original distribution: stay={original_neg}, dropout={original_pos}")
+    print(f"  [SMOTE] Resampled distribution: stay={resampled_neg}, dropout={resampled_pos}")
+    
+    return X_resampled, y_resampled
+
 
 def train_xgboost_with_tuning(
     X_train: np.ndarray,
@@ -305,11 +348,14 @@ def train_xgboost_with_tuning(
         verbosity=0,
     )
 
+    # Use StratifiedKFold for cross-validation
+    cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=SEED)
+    
     search = RandomizedSearchCV(
         estimator=base_xgb,
         param_distributions=param_dist,
         n_iter=20,
-        cv=5,
+        cv=cv,
         scoring="roc_auc",
         n_jobs=-1,
         random_state=SEED,
@@ -317,7 +363,7 @@ def train_xgboost_with_tuning(
         refit=True,
     )
 
-    print("  [XGB] Running RandomizedSearchCV (n_iter=20, cv=5) ...")
+    print(f"  [XGB] Running RandomizedSearchCV (n_iter=20, cv={CV_FOLDS}) ...")
     t0 = time.time()
     search.fit(X_train, y_train)
     elapsed = time.time() - t0
@@ -379,8 +425,55 @@ def ensemble_predict_proba(
 
 
 # ---------------------------------------------------------------------------
-# Step 5 -- Evaluation
+# Step 5 -- Evaluation with 5-fold CV
 # ---------------------------------------------------------------------------
+
+def evaluate_model_with_cv(
+    name:      str,
+    model,
+    X:         np.ndarray,
+    y:         np.ndarray,
+    threshold: float = THRESHOLD,
+) -> dict:
+    """Compute metrics with 5-fold stratified cross-validation."""
+    cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=SEED)
+    
+    cv_auc_scores = []
+    cv_f1_scores = []
+    cv_precision_scores = []
+    cv_recall_scores = []
+    
+    for train_idx, val_idx in cv.split(X, y):
+        X_train_fold, X_val_fold = X[train_idx], X[val_idx]
+        y_train_fold, y_val_fold = y[train_idx], y[val_idx]
+        
+        # Clone and fit model
+        from sklearn.base import clone
+        model_clone = clone(model)
+        model_clone.fit(X_train_fold, y_train_fold)
+        
+        # Predict
+        y_proba = model_clone.predict_proba(X_val_fold)[:, 1]
+        y_pred = (y_proba >= threshold).astype(int)
+        
+        # Calculate metrics
+        cv_auc_scores.append(roc_auc_score(y_val_fold, y_proba))
+        cv_f1_scores.append(f1_score(y_val_fold, y_pred, zero_division=0))
+        cv_precision_scores.append(precision_score(y_val_fold, y_pred, zero_division=0))
+        cv_recall_scores.append(recall_score(y_val_fold, y_pred, zero_division=0))
+    
+    return {
+        "name":      name,
+        "cv_auc_mean":       round(np.mean(cv_auc_scores), 4),
+        "cv_auc_std":        round(np.std(cv_auc_scores), 4),
+        "cv_f1_mean":        round(np.mean(cv_f1_scores), 4),
+        "cv_f1_std":         round(np.std(cv_f1_scores), 4),
+        "cv_precision_mean": round(np.mean(cv_precision_scores), 4),
+        "cv_precision_std":  round(np.std(cv_precision_scores), 4),
+        "cv_recall_mean":    round(np.mean(cv_recall_scores), 4),
+        "cv_recall_std":     round(np.std(cv_recall_scores), 4),
+    }
+
 
 def evaluate_model(
     name:      str,
@@ -416,7 +509,67 @@ def print_confusion_matrix(cm: list, model_name: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 6 -- Serialisation
+# Step 6 -- SHAP Explainability
+# ---------------------------------------------------------------------------
+
+def generate_shap_explanations(
+    model: object,
+    X_train: np.ndarray,
+    X_test: np.ndarray,
+    feature_names: list,
+) -> None:
+    """Generate SHAP summary and waterfall plots."""
+    if not ENABLE_SHAP:
+        print("  [SHAP] SHAP disabled (ENABLE_SHAP=false)")
+        return
+    
+    print("  [SHAP] Generating SHAP explanations...")
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Create SHAP explainer
+        if hasattr(model, 'predict_proba'):
+            # For tree-based models, use TreeExplainer for better performance
+            if hasattr(model, 'estimators_') or hasattr(model, 'feature_importances_'):
+                explainer = shap.TreeExplainer(model)
+            else:
+                # Fallback to KernelExplainer for other models
+                explainer = shap.KernelExplainer(model.predict_proba, X_train[:100])
+        else:
+            explainer = shap.Explainer(model, X_train)
+        
+        # Calculate SHAP values for test set
+        shap_values = explainer.shap_values(X_test[:100])
+        
+        # If shap_values is a list (for classification), take the positive class
+        if isinstance(shap_values, list):
+            shap_values = shap_values[1]
+        
+        # Generate summary plot
+        plt.figure(figsize=(12, 8))
+        shap.summary_plot(shap_values, X_test[:100], feature_names=feature_names, show=False)
+        summary_path = ARTIFACTS_DIR / "shap_summary.png"
+        plt.savefig(summary_path, bbox_inches='tight', dpi=150)
+        plt.close()
+        print(f"  [SHAP] Summary plot saved -> {summary_path}")
+        
+        # Generate waterfall plot for a single prediction
+        plt.figure(figsize=(12, 8))
+        shap.waterfall_plot(shap.Explanation(values=shap_values[0], 
+                                            base_values=explainer.expected_value,
+                                            data=X_test[0],
+                                            feature_names=feature_names), show=False)
+        waterfall_path = ARTIFACTS_DIR / "shap_waterfall.png"
+        plt.savefig(waterfall_path, bbox_inches='tight', dpi=150)
+        plt.close()
+        print(f"  [SHAP] Waterfall plot saved -> {waterfall_path}")
+        
+    except Exception as e:
+        print(f"  [SHAP] Error generating SHAP plots: {e}")
+        print(f"  [SHAP] Skipping SHAP visualization...")
+
+
+# Step 7 -- Serialisation
 # ---------------------------------------------------------------------------
 
 def save_artefacts(
@@ -427,13 +580,14 @@ def save_artefacts(
     ensemble_auc: float,
     train_size:   int,
     test_size:    int,
+    cv_results:   dict,
 ) -> None:
-    os.makedirs(MODEL_DIR, exist_ok=True)
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-    joblib.dump(preprocessor, os.path.join(MODEL_DIR, "preprocessor.pkl"))
-    joblib.dump(xgb_model,    os.path.join(MODEL_DIR, "xgb_model.pkl"))
-    joblib.dump(rf_model,     os.path.join(MODEL_DIR, "rf_model.pkl"))
-    joblib.dump(lr_model,     os.path.join(MODEL_DIR, "lr_model.pkl"))
+    joblib.dump(preprocessor, MODEL_DIR / "preprocessor.pkl")
+    joblib.dump(xgb_model,    MODEL_DIR / "xgb_model.pkl")
+    joblib.dump(rf_model,     MODEL_DIR / "rf_model.pkl")
+    joblib.dump(lr_model,     MODEL_DIR / "lr_model.pkl")
 
     metadata = {
         "version":       VERSION,
@@ -443,12 +597,15 @@ def save_artefacts(
         "threshold":     THRESHOLD,
         "train_size":    train_size,
         "test_size":     test_size,
+        "cv_folds":      CV_FOLDS,
+        "use_smote":     USE_SMOTE,
         "ensemble_auc":  round(ensemble_auc, 4),
         "ensemble_weights": {
             "xgboost":             0.55,
             "random_forest":       0.35,
             "logistic_regression": 0.10,
         },
+        "cv_results":    cv_results,
         "models": {
             "xgboost":             "xgb_model.pkl",
             "random_forest":       "rf_model.pkl",
@@ -457,25 +614,27 @@ def save_artefacts(
         },
     }
 
-    meta_path = os.path.join(MODEL_DIR, "metadata.json")
+    meta_path = MODEL_DIR / "metadata.json"
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
-    abs_model_dir = os.path.abspath(MODEL_DIR)
+    abs_model_dir = MODEL_DIR.absolute()
     print(f"\n  [SAVE] Artefacts -> {abs_model_dir}/")
     for fname in ["preprocessor.pkl", "xgb_model.pkl", "rf_model.pkl",
                   "lr_model.pkl", "metadata.json"]:
-        fpath = os.path.join(MODEL_DIR, fname)
-        size  = os.path.getsize(fpath)
+        fpath = MODEL_DIR / fname
+        size  = fpath.stat().st_size
         print(f"         +-- {fname:<22}  ({size / 1024:.1f} KB)")
 
 
 # ---------------------------------------------------------------------------
-# Step 7 -- Final summary table
+# Step 8 -- Final summary table
 # ---------------------------------------------------------------------------
 
-def print_summary_table(results: list) -> None:
-    _banner("TRAINING COMPLETE -- FINAL RESULTS SUMMARY", width=65)
+def print_summary_table(results: list, cv_results: dict) -> None:
+    _banner("TRAINING COMPLETE -- FINAL RESULTS SUMMARY", width=75)
+    
+    # Print test set results
     col_w = 28
     header = (
         f"  {'Model':<{col_w}}  {'AUC':>6}  {'F1':>6}  "
@@ -492,11 +651,33 @@ def print_summary_table(results: list) -> None:
             f"{r['recall']:>6.4f}"
         )
     print()
+    
+    # Print 5-fold CV results
+    _section("5-Fold Stratified Cross-Validation Results")
+    cv_header = (
+        f"  {'Model':<{col_w}}  {'CV AUC':>10}  {'CV F1':>10}  "
+        f"{'CV Precision':>14}  {'CV Recall':>10}"
+    )
+    print(cv_header)
+    print("  " + "-" * (len(cv_header) - 2))
+    for model_name, cv_metrics in cv_results.items():
+        print(
+            f"  {model_name:<{col_w}}  "
+            f"{cv_metrics['cv_auc_mean']:>6.4f}±{cv_metrics['cv_auc_std']:<4.2f}  "
+            f"{cv_metrics['cv_f1_mean']:>6.4f}±{cv_metrics['cv_f1_std']:<4.2f}  "
+            f"{cv_metrics['cv_precision_mean']:>8.4f}±{cv_metrics['cv_precision_std']:<4.2f}  "
+            f"{cv_metrics['cv_recall_mean']:>6.4f}±{cv_metrics['cv_recall_std']:<4.2f}"
+        )
+    print()
+    
     best = max(results, key=lambda x: x["auc"])
     print(f"  [BEST] Best model by AUC : {best['name']}  (AUC={best['auc']:.4f})")
     print(f"  [INFO] Decision threshold: {THRESHOLD}  (recall-optimised)")
-    print(f"  [INFO] Artefacts saved   : {os.path.abspath(MODEL_DIR)}/")
-    print("=" * 65)
+    print(f"  [INFO] CV Folds: {CV_FOLDS}  |  SMOTE: {USE_SMOTE}  |  SHAP: {ENABLE_SHAP}")
+    print(f"  [INFO] Artefacts saved   : {MODEL_DIR.absolute()}/")
+    if ENABLE_SHAP and SAVE_SHAP_PLOTS:
+        print(f"  [INFO] SHAP plots saved : {ARTIFACTS_DIR.absolute()}/")
+    print("=" * 75)
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +688,7 @@ def main() -> None:
     _banner("JEE DROPOUT PREDICTION -- ML TRAINING PIPELINE  v" + VERSION)
 
     # ---- 1. Data -----------------------------------------------------------
-    _section("Step 1 / 7 -- Data Loading / Generation")
+    _section("Step 1 / 8 -- Data Loading / Generation")
     df = load_or_generate_data()
 
     X = df[FEATURE_COLS].values
@@ -529,7 +710,7 @@ def main() -> None:
     print(f"    Test  : {len(X_test):>5} samples  (dropout={y_test.mean()*100:.1f}%)")
 
     # ---- 2. Preprocessor ---------------------------------------------------
-    _section("Step 2 / 7 -- Preprocessing Pipeline")
+    _section("Step 2 / 8 -- Preprocessing Pipeline")
     print("  Pipeline: SimpleImputer(strategy='median') -> RobustScaler")
     preprocessor = build_preprocessor()
     X_train_proc = preprocessor.fit_transform(X_train)
@@ -541,27 +722,32 @@ def main() -> None:
     print(f"  Class distribution (train):  stay={neg_count}  |  dropout={pos_count}")
     print(f"  scale_pos_weight computed -> {spw}")
 
-    # ---- 3. XGBoost --------------------------------------------------------
-    _section("Step 3 / 7 -- XGBoost (Primary) + Hyperparameter Tuning")
+    # ---- 3. SMOTE ----------------------------------------------------------
+    _section("Step 3 / 8 -- SMOTE for Class Imbalance")
+    X_train_proc, y_train = apply_smote(X_train_proc, y_train)
+
+    # ---- 4. XGBoost --------------------------------------------------------
+    _section("Step 4 / 8 -- XGBoost (Primary) + Hyperparameter Tuning")
     xgb_model = train_xgboost_with_tuning(X_train_proc, y_train, spw)
 
-    # ---- 4. RandomForest ---------------------------------------------------
-    _section("Step 4 / 7 -- RandomForest (Secondary)")
+    # ---- 5. RandomForest ---------------------------------------------------
+    _section("Step 5 / 8 -- RandomForest (Secondary)")
     print("  Training RandomForestClassifier (n_estimators=200, balanced) ...")
     rf_model = train_random_forest(X_train_proc, y_train)
     print("  [OK] RandomForest trained.")
 
-    # ---- 5. Logistic Regression --------------------------------------------
-    _section("Step 5 / 7 -- Logistic Regression (Baseline)")
+    # ---- 6. Logistic Regression --------------------------------------------
+    _section("Step 6 / 8 -- Logistic Regression (Baseline)")
     print("  Training LogisticRegression (C=0.5, balanced, lbfgs) ...")
     lr_model = train_logistic_regression(X_train_proc, y_train)
     print("  [OK] LogisticRegression trained.")
 
-    # ---- 6. Evaluation -----------------------------------------------------
-    _section("Step 6 / 7 -- Evaluation on Hold-Out Test Set")
+    # ---- 7. Evaluation -----------------------------------------------------
+    _section("Step 7 / 8 -- Evaluation on Hold-Out Test Set")
     print(f"  Threshold = {THRESHOLD}  (recall-optimised for early intervention)\n")
 
     results = []
+    cv_results = {}
 
     for name, model in [
         ("XGBoost",            xgb_model),
@@ -571,9 +757,18 @@ def main() -> None:
         proba = model.predict_proba(X_test_proc)[:, 1]
         r     = evaluate_model(name, y_test, proba)
         results.append(r)
+        
+        # 5-fold CV evaluation
+        cv_r = evaluate_model_with_cv(name, model, X_train_proc, y_train)
+        cv_results[name] = cv_r
+        
         print(
             f"  {name:<22}  AUC={r['auc']:.4f}  F1={r['f1']:.4f}  "
             f"Precision={r['precision']:.4f}  Recall={r['recall']:.4f}"
+        )
+        print(
+            f"  {'':22}  CV AUC={cv_r['cv_auc_mean']:.4f}±{cv_r['cv_auc_std']:.4f}  "
+            f"CV F1={cv_r['cv_f1_mean']:.4f}±{cv_r['cv_f1_std']:.4f}"
         )
         print_confusion_matrix(r["cm"], name)
         print()
@@ -596,8 +791,12 @@ def main() -> None:
         digits=4,
     ))
 
-    # ---- 7. Save artefacts -------------------------------------------------
-    _section("Step 7 / 7 -- Serialising Artefacts")
+    # ---- 8. SHAP Explainability -------------------------------------------
+    _section("Step 8 / 8 -- SHAP Explainability")
+    generate_shap_explanations(xgb_model, X_train_proc, X_test_proc, FEATURE_COLS)
+
+    # ---- 9. Save artefacts -------------------------------------------------
+    _section("Serialising Artefacts")
     save_artefacts(
         preprocessor = preprocessor,
         xgb_model    = xgb_model,
@@ -606,10 +805,11 @@ def main() -> None:
         ensemble_auc = ens_r["auc"],
         train_size   = len(X_train),
         test_size    = len(X_test),
+        cv_results   = cv_results,
     )
 
     # ---- Final summary -----------------------------------------------------
-    print_summary_table(results)
+    print_summary_table(results, cv_results)
 
 
 # ---------------------------------------------------------------------------

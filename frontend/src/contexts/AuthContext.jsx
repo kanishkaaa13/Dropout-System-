@@ -48,13 +48,26 @@ export function AuthProvider({ children }) {
   // ── logout ───────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
     try {
-      await api.post('/auth/logout')
-    } catch (_) { /* ignore */ }
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    setUser(null)
-    setRole(null)
-    setIsAuth(false)
+      const refreshToken = localStorage.getItem('refresh_token')
+      if (refreshToken) {
+        await api.post('/auth/logout', { refresh_token: refreshToken })
+      }
+    } catch (err) {
+      console.error('Logout API Error Details:', err)
+      console.error('Error response:', err.response)
+      console.error('Error message:', err.message)
+      // If we get a 422 or any other error, still proceed with client-side cleanup
+      if (err.response?.status === 422) {
+        console.log('Logout validation error, proceeding with client-side cleanup')
+      }
+    } finally {
+      // Always perform client-side cleanup regardless of API response
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      setUser(null)
+      setRole(null)
+      setIsAuth(false)
+    }
   }, [])
 
   return (

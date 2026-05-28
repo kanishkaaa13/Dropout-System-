@@ -98,7 +98,7 @@ Provide clear, structured responses using Markdown formatting. Be helpful, accur
 import httpx
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
-PREFERRED_MODELS = ["mistral", "llama3", "gemma", "deepseek-r1:1.5b"]  # Priority order for model selection
+PREFERRED_MODELS = ["deepseek-r1:1.5b", "mistral", "llama3", "gemma"]  # Priority order for model selection
 
 
 async def get_available_models() -> List[str]:
@@ -164,7 +164,7 @@ async def call_ollama(message: str, system_prompt: str) -> Optional[tuple[str, s
         # Select best available model
         model = await select_model()
         if not model:
-            logger.warning("No models available for Ollama")
+            logger.error("Ollama connection failed. Reason: No models available")
             return None, None
         
         # Sanitize payload for Ollama API format
@@ -180,7 +180,8 @@ async def call_ollama(message: str, system_prompt: str) -> Optional[tuple[str, s
             }
         }
         
-        logger.info(f"Calling Ollama with model: {model}")
+        logger.info(f"Ollama connection attempt: URL={OLLAMA_BASE_URL}/api/generate, Model={model}")
+        logger.info(f"Payload: prompt_length={len(payload['prompt'])}, stream={payload['stream']}")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -188,23 +189,25 @@ async def call_ollama(message: str, system_prompt: str) -> Optional[tuple[str, s
                 json=payload
             )
             
+            logger.info(f"Ollama response status: {response.status_code}")
+            
             if response.status_code == 200:
                 data = response.json()
                 response_text = data.get("response", "").strip()
-                logger.info(f"Ollama response received, length: {len(response_text)}")
+                logger.info(f"Ollama response received successfully. Response length: {len(response_text)}")
                 return response_text, model
             else:
-                logger.warning(f"Ollama returned status {response.status_code}, body: {response.text}")
+                logger.error(f"Ollama connection failed. Reason: HTTP {response.status_code} - {response.text}")
                 return None, None
                 
     except httpx.ConnectError as e:
-        logger.error(f"Ollama connection refused: {e}")
+        logger.error(f"Ollama connection failed. Reason: Connection refused (ECONNREFUSED) - {e}")
         return None, None
     except httpx.TimeoutException as e:
-        logger.error(f"Ollama request timed out: {e}")
+        logger.error(f"Ollama connection failed. Reason: Request timed out - {e}")
         return None, None
     except Exception as e:
-        logger.error(f"Unexpected error calling Ollama: {e}")
+        logger.error(f"Ollama connection failed. Reason: Unexpected error - {type(e).__name__}: {e}")
         return None, None
 
 
@@ -224,6 +227,7 @@ def get_fallback_response(message: str, role: str = "student") -> str:
     lower_message = message.lower()
     
     if role == "student":
+        # Chemistry optimization
         if 'chemistry' in lower_message and ('optimize' in lower_message or 'improve' in lower_message):
             return """To optimize your Chemistry score:
 
@@ -248,6 +252,7 @@ def get_fallback_response(message: str, role: str = "student") -> str:
 
 Would you like me to create a specific study plan for any of these areas?"""
         
+        # Stress management
         elif 'stress' in lower_message or 'anxiety' in lower_message:
             return """Managing exam stress is crucial for optimal performance. Here are proven strategies:
 
@@ -271,48 +276,163 @@ Remember: Some stress is normal and can actually improve performance. The key is
 
 Would you like specific techniques for any of these areas?"""
         
+        # General JEE information
+        elif 'what is' in lower_message or 'jee' in lower_message:
+            return """JEE (Joint Entrance Examination) is one of India's most competitive engineering entrance exams.
+
+**JEE Overview:**
+- **JEE Main**: Conducted by NTA, serves as qualifying exam for JEE Advanced
+- **JEE Advanced**: Conducted by IITs, required for admission to IITs
+- **Subjects**: Physics, Chemistry, Mathematics (equal weightage)
+- **Mode**: Computer-based test (CBT)
+
+**Key Preparation Areas:**
+- **Physics**: Mechanics, Electromagnetism, Optics, Modern Physics
+- **Chemistry**: Organic, Inorganic, Physical Chemistry
+- **Mathematics**: Calculus, Algebra, Coordinate Geometry, Trigonometry
+
+**Success Factors:**
+- Consistent daily practice (6-8 hours)
+- Strong conceptual understanding
+- Regular mock tests and analysis
+- Time management during exam
+- Physical and mental well-being
+
+Would you like specific strategies for any subject or aspect of JEE preparation?"""
+        
+        # Rank-related queries
+        elif 'rank' in lower_message:
+            return """Understanding JEE rank and performance:
+
+**Rank Determination:**
+- JEE Main rank is based on normalized scores across multiple sessions
+- JEE Advanced rank is based on aggregate marks
+- All India Rank (AIR) determines college and branch eligibility
+
+**Target Setting:**
+- **Top 100 AIR**: IIT Bombay (Computer Science)
+- **Top 1000 AIR**: Top IITs (Computer Science, Electrical)
+- **Top 5000 AIR**: IITs (various branches)
+- **Top 20000 AIR**: NITs and IIITs (top branches)
+- **Top 50000 AIR**: NITs and IIITs (good branches)
+
+**Improvement Strategy:**
+- Analyze weak subjects through mock tests
+- Focus on high-weightage topics
+- Improve speed and accuracy
+- Regular revision of formulas and concepts
+
+Use the Prediction Engine to analyze your current metrics and get personalized rank projections.
+
+Would you like help with specific rank improvement strategies?"""
+        
+        # Physics-related queries
+        elif 'physics' in lower_message:
+            return """To excel in Physics for JEE:
+
+**Core Topics to Master:**
+1. **Mechanics** (Kinematics, Laws of Motion, Work-Energy, Rotational Motion)
+2. **Electromagnetism** (Electrostatics, Current Electricity, Magnetism)
+3. **Optics** (Ray Optics, Wave Optics)
+4. **Modern Physics** (Dual Nature, Atoms, Nuclei)
+5. **Thermodynamics** (Laws, Processes, Heat Engines)
+
+**Study Strategy:**
+- Focus on understanding concepts, not memorizing formulas
+- Practice numerical problems daily (minimum 20-30)
+- Solve previous year JEE papers
+- Use diagrams and visualizations for better understanding
+- Master standard problem-solving techniques
+
+**Common Mistakes to Avoid:**
+- Neglecting numerical practice
+- Skipping derivations
+- Not revising regularly
+- Ignoring units and dimensions
+
+Would you like specific strategies for any Physics topic?"""
+        
+        # Time management
+        elif 'time' in lower_message or 'schedule' in lower_message:
+            return """Effective time management for JEE preparation:
+
+**Daily Schedule Template:**
+- **Morning (6:00-10:00)**: Physics (most alert time)
+- **Afternoon (2:00-5:00)**: Mathematics (problem-solving)
+- **Evening (6:00-9:00)**: Chemistry (conceptual study)
+- **Night (9:30-10:30)**: Revision and planning
+
+**Weekly Structure:**
+- **Monday-Thursday**: New topics and practice
+- **Friday**: Mock tests and analysis
+- **Saturday**: Weak area focus
+- **Sunday**: Revision and relaxation
+
+**Time Management Tips:**
+- Use Pomodoro technique (25 min study, 5 min break)
+- Prioritize high-weightage topics
+- Set daily and weekly goals
+- Track time spent on each subject
+- Include buffer time for unexpected delays
+
+**Avoid Time Wasters:**
+- Excessive social media
+- Unnecessary phone usage
+- Long breaks between study sessions
+- Studying too many topics simultaneously
+
+Would you like a personalized schedule based on your current study patterns?"""
+        
+        # Default fallback for other queries
         else:
-            return f"""I understand you're asking about "{message}". 
+            return """I can help you with JEE preparation guidance. Here are some areas I can assist with:
 
-While I'm currently running in offline mode (Ollama is not available), I can still provide some guidance:
+**Subject-Specific Help:**
+- Chemistry optimization strategies
+- Physics problem-solving techniques
+- Mathematics practice plans
 
-**General Study Tips:**
-- Consistency is more important than intensity
-- Focus on understanding concepts over memorization
-- Regular revision is key for long-term retention
-- Take care of your physical and mental health
+**General Preparation:**
+- Time management and study schedules
+- Stress management techniques
+- Rank projection and improvement
+- Mock test analysis
 
-**For Specific Help:**
-- Try asking about: Chemistry optimization, revision schedules, rank tracking, stress management, or Physics problem-solving
-- I can provide detailed strategies for these topics
+**Common Topics:**
+- "How to optimize Chemistry score"
+- "Tips for managing exam stress"
+- "Time management strategies"
+- "Physics problem-solving improvement"
+- "Rank tracking and targets"
 
-**Note:** For more personalized advice, please connect with your faculty counselor or use the Prediction Engine to analyze your performance metrics.
+For personalized advice based on your performance metrics, please use the Prediction Engine or connect with your faculty counselor.
 
-Is there anything specific about JEE preparation I can help you with?"""
+What specific aspect of JEE preparation would you like help with?"""
     
     elif role == "faculty":
-        return f"""I understand you're asking about "{message}".
-
-While I'm currently running in offline mode (Ollama is not available), I can still provide some faculty-focused guidance:
+        return """I can assist with faculty operations and student management:
 
 **Available Capabilities:**
 - Draft parent communication templates
-- Analyze topic-wise accuracy
+- Analyze topic-wise accuracy and performance
 - Create assignment schedules
 - Monitor attendance trends
 - Compare performance across batches
+- Generate intervention strategies
 
-**For Specific Help:**
-- Try asking about: parent follow-ups, topic accuracy, assignment schedules, attendance trends, or batch comparisons
+**Common Queries:**
+- "Draft parent follow-up for at-risk students"
+- "Which topic has lowest accuracy in Batch 1?"
+- "Generate assignment schedule for Physics"
+- "Show students with declining attendance"
+- "Compare performance across all batches"
 
-**Note:** For real-time data and personalized insights, please use the Faculty Dashboard or connect with the system administrator.
+For real-time data and personalized insights, please use the Faculty Dashboard.
 
-Is there anything specific about faculty operations I can help you with?"""
+What specific faculty operation would you like help with?"""
     
     elif role == "admin":
-        return f"""I understand you're asking about "{message}".
-
-While I'm currently running in offline mode (Ollama is not available), I can still provide some admin-focused guidance:
+        return """I can assist with system operations and administration:
 
 **Available Capabilities:**
 - Export system anomaly reports
@@ -320,16 +440,21 @@ While I'm currently running in offline mode (Ollama is not available), I can sti
 - Run diagnostic verification on datasets
 - Generate system health summaries
 - Verify database integrity
+- Monitor system performance
 
-**For Specific Help:**
-- Try asking about: anomaly reports, gateway status, dataset diagnostics, system health, or database verification
+**Common Queries:**
+- "Export system anomaly reports"
+- "Check backend service gateway status"
+- "Run diagnostic verification on datasets"
+- "Generate system health summary"
+- "Verify database integrity"
 
-**Note:** For real-time monitoring and system administration, please use the Admin Dashboard or connect directly with system services.
+For real-time monitoring and system administration, please use the Admin Dashboard.
 
-Is there anything specific about system operations I can help you with?"""
+What specific system operation would you like help with?"""
     
     else:
-        return f"I understand you're asking about \"{message}\". I'm currently running in offline mode. Please try again later or contact support."
+        return "I can assist with general JEE Dropout Prediction System queries. Please specify your role (student, faculty, admin) for more targeted assistance."
 
 
 # ── Chat Endpoint ───────────────────────────────────────────────────────────────
