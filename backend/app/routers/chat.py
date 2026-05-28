@@ -11,9 +11,11 @@ IMPORTANT: To allow CORS requests from frontend, run Ollama with:
 """
 
 import logging
-from typing import Optional, List
+import json
+from typing import Optional, List, AsyncGenerator
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -229,6 +231,59 @@ async def call_ollama(messages: List[dict], model: str) -> Optional[tuple[str, s
     except Exception as e:
         logger.error(f"Ollama connection failed. Reason: Unexpected error - {type(e).__name__}: {e}")
         return None, None
+
+
+async def call_ollama_stream(messages: List[dict], model: str) -> AsyncGenerator[str, None]:
+    """
+    Call Ollama API with streaming enabled.
+    
+    Args:
+        messages: Conversation history as messages array
+        model: Model name to use
+    
+    Yields:
+        Chunks of response text as they arrive from Ollama
+    """
+    try:
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+            "options": {
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "num_predict": 500
+            }
+        }
+        
+        logger.info(f"Ollama streaming attempt: URL={OLLAMA_BASE_URL}/api/chat, Model={model}")
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream("POST", f"{OLLAMA_BASE_URL}/api/chat", json=payload) as response:
+                if response.status_code == 200:
+                    async for line in response.aiter_lines():
+                        if line.strip():
+                            try:
+                                data = json.loads(line)
+                                if "message" in data and "content" in data["message"]:
+                                    chunk = data["message"]["content"]
+                                    if chunk:
+                                        yield chunk
+                            except json.JSONDecodeError:
+                                continue
+                else:
+                    logger.error(f"Ollama streaming failed. Status: {response.status_code}")
+                    yield f"[ERROR] Ollama returned status {response.status_code}"
+                    
+    except httpx.ConnectError as e:
+        logger.error(f"Ollama streaming connection refused: {e}")
+        yield "[ERROR] Connection refused - Ollama may not be running"
+    except httpx.TimeoutException as e:
+        logger.error(f"Ollama streaming timeout: {e}")
+        yield "[ERROR] Request timed out"
+    except Exception as e:
+        logger.error(f"Ollama streaming error: {type(e).__name__}: {e}")
+        yield f"[ERROR] {str(e)}"
 
 
 # ── Fallback Responses ───────────────────────────────────────────────────────────
@@ -548,6 +603,64 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             status="offline",
             model_used=None
         )
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest, http_request: Request):
+    """
+    Streaming chat endpoint that interfaces with Ollama for real-time AI responses.
+    
+    Uses Server-Sent Events (SSE) to stream tokens as they arrive from Ollama.
+    
+    Args:
+        request: Chat request with message, messages array, and optional system_context
+        http_request: FastAPI request object
+    
+    Returns:
+        StreamingResponse with SSE-formatted chunks
+    """
+    # Get user role from request or default to student
+    role = request.role or "student"
+    
+    # Generate system prompt based on role and system context
+    system_prompt = get_system_prompt(role, request.system_context)
+    
+    # Build messages array for conversation history
+    messages = request.messages or []
+    
+    # If no messages provided, start fresh with system prompt
+    if not messages:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": request.message}
+        ]
+    else:
+        # Ensure system prompt is first message
+        if messages[0].get("role") != "system":
+            messages.insert(0, {"role": "system", "content": system_prompt})
+        # Add user message
+        messages.append({"role": "user", "content": request.message})
+    
+    # Select best available model
+    model = await select_model()
+    if not model:
+        logger.error("Ollama connection failed. Reason: No models available")
+        # Return error as SSE
+        async def error_stream():
+            yield f"data: {json.dumps({'error': 'Ollama unavailable - no models'})}\n\n"
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
+    
+    # Stream response from Ollama
+    async def stream_generator():
+        try:
+            async for chunk in call_ollama_stream(messages, model):
+                # Format as SSE
+                yield f"data: {json.dumps({'content': chunk})}\n\n"
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
+    return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
 
 @router.get("/chat/status")

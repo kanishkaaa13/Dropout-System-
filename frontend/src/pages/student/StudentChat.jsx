@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import api from '../../api/axiosConfig'
-import { MessageSquare, Send, Bot, User, Sparkles, Clock, AlertCircle, Zap, BookOpen, AlertTriangle } from 'lucide-react'
+import { Send, Bot, User, Clock, AlertCircle, PaperPlane } from 'lucide-react'
 
 export default function StudentChat() {
   const navigate = useNavigate()
