@@ -25,8 +25,10 @@ router = APIRouter(tags=["Chat"])
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
     message: str = Field(..., description="User message to send to the AI")
+    messages: Optional[List[dict]] = Field(None, description="Conversation history as messages array")
     thread_id: Optional[int] = Field(None, description="Thread ID for conversation context")
     role: Optional[str] = Field("student", description="User role for persona customization")
+    system_context: Optional[dict] = Field(None, description="Additional context (risk score, SHAP features)")
 
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
