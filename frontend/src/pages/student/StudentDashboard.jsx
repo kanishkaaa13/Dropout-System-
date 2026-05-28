@@ -89,134 +89,152 @@ export default function StudentDashboard() {
 
   const data = dashboardData || getMockDashboardData()
 
+  // Prepare student data for chat panel
+  const studentDataForChat = {
+    full_name: data.student_name,
+    risk_score: data.risk_score,
+    risk_level: data.risk_level
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-              Welcome back, {data.student_name}
-            </h1>
-            <p className="text-slate-500 mt-1">
-              {data.registration_code} • {data.batch}
-            </p>
-          </div>
-          {error && (
-            <div className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
-              Using offline mode
+    <div className="flex gap-6 h-full">
+      {/* Main Content - Left Side */}
+      <div className="flex-1 space-y-6 overflow-y-auto">
+        {/* Header */}
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">
+                Welcome back, {data.student_name}
+              </h1>
+              <p className="text-slate-500 mt-1">
+                {data.registration_code} • {data.batch}
+              </p>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Summary Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Predicted Rank */}
-        <MetricCard
-          title="Predicted Rank"
-          value={data.predicted_rank}
-          subtitle={`Target: Top ${data.target_rank}`}
-          icon={<Target className="w-5 h-5" />}
-          trend={data.predicted_rank <= data.target_rank ? 'up' : 'down'}
-          color={data.predicted_rank <= data.target_rank ? 'green' : 'red'}
-        />
-
-        {/* Mock Test Average */}
-        <MetricCard
-          title="Mock Test Average"
-          value={`${data.mock_average} / ${data.mock_total}`}
-          subtitle="Last 5 tests"
-          icon={<Award className="w-5 h-5" />}
-          trend="neutral"
-          color="blue"
-        />
-
-        {/* Risk Profile */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-slate-600">Risk Profile</p>
-            <Activity className="w-5 h-5 text-slate-400" />
-          </div>
-          <div className="flex items-center justify-between">
-            <RiskBadge level={data.risk_level} size="lg" showLabel />
+            {error && (
+              <div className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
+                Using offline mode
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Engagement Metrics */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-slate-600">Engagement</p>
-            <Clock className="w-5 h-5 text-slate-400" />
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Attendance</span>
-              <span className="font-medium text-slate-900">{data.attendance_rate}%</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Assignments</span>
-              <span className="font-medium text-slate-900">{data.assignment_completion}%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Academic Analytics */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-6">Academic Analytics</h2>
-        
-        {/* Subject Health */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {Object.entries(data.subjects).map(([subject, info]) => (
-            <SubjectCard
-              key={subject}
-              subject={subject}
-              score={info.score}
-              trend={info.trend}
-              mockScore={info.mock_score}
-            />
-          ))}
-        </div>
-
-        {/* Score Trend */}
-        <div>
-          <h3 className="text-sm font-medium text-slate-600 mb-3">Score Trend</h3>
-          <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-            <ScoreTrendPlaceholder data={data.score_history} />
-          </div>
-        </div>
-      </div>
-
-      {/* Stress & Wellness Index */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-6">Stress & Wellness Index</h2>
-        
+        {/* Summary Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <WellnessMetric
-            label="Burnout Score"
-            value={data.wellness.burnout_score}
-            max={10}
-            color="red"
+          {/* Predicted Rank */}
+          <MetricCard
+            title="Predicted Rank"
+            value={data.predicted_rank}
+            subtitle={`Target: Top ${data.target_rank}`}
+            icon={<Target className="w-5 h-5" />}
+            trend={data.predicted_rank <= data.target_rank ? 'up' : 'down'}
+            color={data.predicted_rank <= data.target_rank ? 'green' : 'red'}
           />
-          <WellnessMetric
-            label="Stress Level"
-            value={data.wellness.stress_level}
-            max={10}
-            color="amber"
+
+          {/* Mock Test Average */}
+          <MetricCard
+            title="Mock Test Average"
+            value={`${data.mock_average} / ${data.mock_total}`}
+            subtitle="Last 5 tests"
+            icon={<Award className="w-5 h-5" />}
+            trend="neutral"
+            color="blue"
           />
-          <WellnessMetric
-            label="Sleep vs Study"
-            value={`${data.wellness.sleep_hours}h / ${data.wellness.study_hours}h`}
-            type="ratio"
-          />
-          <WellnessMetric
-            label="Peer Pressure"
-            value={data.wellness.peer_pressure}
-            max={10}
-            color="purple"
-          />
+
+          {/* Risk Profile */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-slate-600">Risk Profile</p>
+              <Activity className="w-5 h-5 text-slate-400" />
+            </div>
+            <div className="flex items-center justify-between">
+              <RiskBadge level={data.risk_level} size="lg" showLabel />
+            </div>
+          </div>
+
+          {/* Engagement Metrics */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-slate-600">Engagement</p>
+              <Clock className="w-5 h-5 text-slate-400" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Attendance</span>
+                <span className="font-medium text-slate-900">{data.attendance_rate}%</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Assignments</span>
+                <span className="font-medium text-slate-900">{data.assignment_completion}%</span>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Academic Analytics */}
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-6">Academic Analytics</h2>
+          
+          {/* Subject Health */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {Object.entries(data.subjects).map(([subject, info]) => (
+              <SubjectCard
+                key={subject}
+                subject={subject}
+                score={info.score}
+                trend={info.trend}
+                mockScore={info.mock_score}
+              />
+            ))}
+          </div>
+
+          {/* Score Trend */}
+          <div>
+            <h3 className="text-sm font-medium text-slate-600 mb-3">Score Trend</h3>
+            <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+              <ScoreTrendPlaceholder data={data.score_history} />
+            </div>
+          </div>
+        </div>
+
+        {/* Stress & Wellness Index */}
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-6">Stress & Wellness Index</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <WellnessMetric
+              label="Burnout Score"
+              value={data.wellness.burnout_score}
+              max={10}
+              color="red"
+            />
+            <WellnessMetric
+              label="Stress Level"
+              value={data.wellness.stress_level}
+              max={10}
+              color="amber"
+            />
+            <WellnessMetric
+              label="Sleep vs Study"
+              value={`${data.wellness.sleep_hours}h / ${data.wellness.study_hours}h`}
+              type="ratio"
+            />
+            <WellnessMetric
+              label="Peer Pressure"
+              value={data.wellness.peer_pressure}
+              max={10}
+              color="purple"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Chat Panel - Right Side */}
+      <div className="w-96 flex-shrink-0">
+        <StudentChatPanel 
+          studentData={studentDataForChat} 
+          shapFeatures={shapFeatures}
+        />
       </div>
     </div>
   )
