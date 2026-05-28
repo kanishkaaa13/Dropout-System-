@@ -6,6 +6,7 @@ import RiskBadge from '../../components/RiskBadge'
 import CreativePlanner from '../../components/CreativePlanner'
 import ExplanationCard from '../../components/ExplanationCard'
 import InterventionPanel from '../../components/InterventionPanel'
+import { MetricCardSkeleton, CardSkeleton } from '../../components/SkeletonLoader'
 import { TrendingUp, TrendingDown, Activity, Clock, Target, Award, LayoutDashboard, BookOpen } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
@@ -185,8 +186,16 @@ export default function StudentDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      <div className="space-y-6">
+        <CardSkeleton />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+        </div>
+        <CardSkeleton />
+        <CardSkeleton />
       </div>
     )
   }
@@ -365,8 +374,8 @@ export default function StudentDashboard() {
           />
 
           {/* Stress & Wellness Index */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">Stress & Wellness Index</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 transition-colors duration-200">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">Stress & Wellness Index</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <WellnessMetric
