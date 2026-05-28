@@ -8,6 +8,8 @@ Usage
     from backend.app.middleware.auth import (
         get_current_user,
         get_admin_user,
+        get_counselor_or_admin,
+        get_teacher_or_admin,
         get_faculty_or_admin,
     )
 
@@ -170,14 +172,38 @@ def get_admin_user(
     return current_user
 
 
+def get_counselor_or_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Require the authenticated user to be counselor or admin."""
+    if current_user.role not in ("admin", "counselor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Counselor or admin access required.",
+        )
+    return current_user
+
+
+def get_teacher_or_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Require the authenticated user to be teacher or admin."""
+    if current_user.role not in ("admin", "teacher"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Teacher or admin access required.",
+        )
+    return current_user
+
+
 def get_faculty_or_admin(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Require the authenticated user to be faculty or admin."""
-    if current_user.role not in ("admin", "faculty"):
+    """Require the authenticated user to be faculty, counselor, teacher, or admin."""
+    if current_user.role not in ("admin", "faculty", "counselor", "teacher"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Faculty or admin access required.",
+            detail="Faculty, counselor, teacher, or admin access required.",
         )
     return current_user
 

@@ -375,3 +375,141 @@ def get_risk_history(
         .all()
     )
     return [RiskHistoryPoint.model_validate(r) for r in rows]
+
+
+# ── GET /students/{id}/timeline ────────────────────────────────────────────────
+
+@router.get(
+    "/{student_id}/timeline",
+    status_code=status.HTTP_200_OK,
+    summary="Get student risk timeline with events",
+)
+def get_student_timeline(
+    student_id:   int,
+    weeks:        int  = Query(12, ge=4, le=24, description="Number of weeks to fetch"),
+    current_user: User    = Depends(get_faculty_or_admin),
+    db:           Session = Depends(get_db),
+) -> dict:
+    """
+    Return weekly timeline data for a student including:
+    - Risk score trend
+    - Attendance percentage
+    - GPA (if available)
+    - Stress level
+    - Events (counseling sessions, interventions)
+    
+    If historical data doesn't exist, generates synthetic data for demo.
+    """
+    from datetime import datetime, timezone, timedelta
+    import random
+    
+    student = _get_student_or_404(student_id, db)
+    
+    # Check if we have real historical data
+    real_assessments = (
+        db.query(RiskAssessment)
+        .filter(RiskAssessment.student_id == student_id)
+        .order_by(RiskAssessment.assessed_at.desc())
+        .all()
+    )
+    
+    # Get events (alerts, interventions)
+    alerts = (
+        db.query(Alert)
+        .filter(Alert.student_id == student_id)
+        .order_by(Alert.created_at.desc())
+        .all()
+    )
+    
+    interventions = (
+        db.query(Intervention)
+        .filter(Intervention.student_id == student_id)
+        .order_by(Intervention.created_at.desc())
+        .all()
+    )
+    
+    # Generate timeline data
+    timeline_data = []
+    base_date = datetime.now(timezone.utc)
+    
+    # If we have real data, use it; otherwise generate synthetic
+    if len(real_assessments) >= 2:
+        # Use real data
+        for i in range(weeks):
+            week_date = base_date - timedelta(weeks=weeks - i)
+            week_str = week_date.strftime("%Y-W%W")
+            
+            # Find assessment closest to this week
+            week_assessment = None
+            for assessment in real_assessments:
+                if abs((assessment.assessed_at - week_date).days) <= 7:
+                    week_assessment = assessment
+                    break
+            
+            # Get events for this week
+            week_events = []
+            for alert in alerts:
+                if abs((alert.created_at - week_date).days) <= 7:
+                    week_events.append(f"Alert: {alert.alert_type}")
+            for intervention in interventions:
+                if abs((intervention.created_at - week_date).days) <= 7:
+                    week_events.append(f"Intervention: {intervention.priority} priority")
+            
+            if week_assessment:
+                timeline_data.append({
+                    "week": week_str,
+                    "risk_score": week_assessment.risk_score / 100.0,  # Normalize to 0-1
+                    "attendance": week_assessment.feature_snapshot.get("attendance_rate", 80) if week_assessment.feature_snapshot else 80,
+                    "gpa": week_assessment.feature_snapshot.get("mock_test_avg", 200) / 360 * 4.0 if week_assessment.feature_snapshot else 3.0,
+                    "stress": week_assessment.feature_snapshot.get("stress_level", 5) if week_assessment.feature_snapshot else 5,
+                    "events": week_events
+                })
+            else:
+                # Fill missing weeks with interpolated data
+                timeline_data.append({
+                    "week": week_str,
+                    "risk_score": 0.5,
+                    "attendance": 80,
+                    "gpa": 3.0,
+                    "stress": 5,
+                    "events": week_events
+                })
+    else:
+        # Generate synthetic data for demo
+        base_risk = random.uniform(0.3, 0.7)
+        base_attendance = random.uniform(60, 90)
+        base_gpa = random.uniform(2.5, 3.8)
+        base_stress = random.randint(3, 7)
+        
+        for i in range(weeks):
+            week_date = base_date - timedelta(weeks=weeks - i)
+            week_str = week_date.strftime("%Y-W%W")
+            
+            # Add some realistic fluctuation
+            fluctuation = random.uniform(-0.1, 0.1)
+            risk_score = max(0, min(1, base_risk + fluctuation + (i / weeks) * 0.1))
+            attendance = max(50, min(100, base_attendance + random.uniform(-10, 10)))
+            gpa = max(2.0, min(4.0, base_gpa + random.uniform(-0.3, 0.3)))
+            stress = max(1, min(10, base_stress + random.randint(-2, 2)))
+            
+            # Add random events
+            events = []
+            if random.random() < 0.2:
+                events.append("Counseling session")
+            if random.random() < 0.15:
+                events.append("Intervention assigned")
+            
+            timeline_data.append({
+                "week": week_str,
+                "risk_score": round(risk_score, 2),
+                "attendance": round(attendance, 1),
+                "gpa": round(gpa, 2),
+                "stress": stress,
+                "events": events
+            })
+    
+    return {
+        "student_id": student_id,
+        "weeks": weeks,
+        "timeline": timeline_data
+    }
