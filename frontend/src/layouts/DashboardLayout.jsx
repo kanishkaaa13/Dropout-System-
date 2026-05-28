@@ -2,8 +2,9 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   LayoutDashboard, Users, BellRing, BarChart3,
-  LogOut, GraduationCap, ClipboardList
+  LogOut, GraduationCap, ClipboardList, Menu, X
 } from 'lucide-react'
+import { useState } from 'react'
 import clsx from 'clsx'
 
 const NAV_ADMIN = [
@@ -23,25 +24,47 @@ export default function DashboardLayout() {
   const { user, role, logout } = useAuth()
   const navigate = useNavigate()
   const navItems = role === 'admin' ? NAV_ADMIN : NAV_FACULTY
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   const handleLogout = async () => {
     await logout()
     navigate('/login', { replace: true })
   }
 
+  const getInitials = (name) => {
+    if (!name) return 'U'
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  }
+
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-[#F8F9FC] overflow-hidden font-sans">
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg border border-gray-200"
+      >
+        {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+      </button>
+
       {/* Sidebar */}
-      <aside className="w-60 shrink-0 bg-slate-900 flex flex-col border-r border-slate-800">
+      <aside
+        className={clsx(
+          'fixed lg:static inset-y-0 left-0 z-40 w-60 bg-white flex flex-col border-r border-gray-200 transition-transform duration-300',
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        )}
+      >
+        {/* Purple accent border */}
+        <div className="h-1 bg-[#6B5CE7]" />
+
         {/* Logo */}
-        <div className="px-5 py-5 border-b border-slate-800">
+        <div className="px-5 py-5 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 bg-[#6B5CE7] rounded-lg flex items-center justify-center shrink-0">
               <GraduationCap className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
-              <p className="text-white font-bold text-sm leading-tight truncate">JEE Predictor</p>
-              <p className="text-slate-400 text-xs capitalize">{role}</p>
+              <p className="text-gray-900 font-bold text-sm leading-tight truncate">JEE Predictor</p>
+              <p className="text-gray-500 text-xs capitalize">{role}</p>
             </div>
           </div>
         </div>
@@ -53,12 +76,13 @@ export default function DashboardLayout() {
               key={to}
               to={to}
               end={end}
+              onClick={() => setIsSidebarOpen(false)}
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    ? 'bg-[#6B5CE7] text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
                 )
               }
             >
@@ -68,21 +92,36 @@ export default function DashboardLayout() {
           ))}
         </nav>
 
-        {/* User + logout */}
-        <div className="px-3 py-4 border-t border-slate-800">
-          <div className="px-3 py-2 mb-1">
-            <p className="text-white text-sm font-medium truncate">{user?.full_name || user?.email}</p>
-            <p className="text-slate-400 text-xs truncate">{user?.email}</p>
+        {/* User profile card */}
+        <div className="px-3 py-4 border-t border-gray-100">
+          <div className="flex items-center gap-3 px-3 py-2 mb-2">
+            <div className="w-9 h-9 bg-[#6B5CE7] rounded-full flex items-center justify-center shrink-0">
+              <span className="text-white text-xs font-medium">
+                {getInitials(user?.full_name)}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-gray-900 text-sm font-medium truncate">{user?.full_name || user?.email}</p>
+              <p className="text-gray-500 text-xs capitalize">{role}</p>
+            </div>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
           >
             <LogOut className="w-4 h-4 shrink-0" />
             Sign out
           </button>
         </div>
       </aside>
+
+      {/* Overlay for mobile */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
 
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden">
