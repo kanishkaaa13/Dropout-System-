@@ -4,6 +4,7 @@ import api from '../../api/axiosConfig'
 import RiskBadge from '../../components/RiskBadge'
 import CreativePlanner from '../../components/CreativePlanner'
 import { TrendingUp, TrendingDown, Activity, Clock, Target, Award, LayoutDashboard, BookOpen } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 export default function StudentDashboard() {
   const { user } = useAuth()
@@ -73,12 +74,12 @@ export default function StudentDashboard() {
       study_hours: 10,
       peer_pressure: 5
     },
-    score_history: [
-      { test: 'Mock 1', score: 165 },
-      { test: 'Mock 2', score: 172 },
-      { test: 'Mock 3', score: 158 },
-      { test: 'Mock 4', score: 180 },
-      { test: 'Mock 5', score: 175 }
+    score_trend_data: [
+      { name: 'Mock 1', physics: 58, chemistry: 52, maths: 65 },
+      { name: 'Mock 2', physics: 62, chemistry: 55, maths: 68 },
+      { name: 'Mock 3', physics: 60, chemistry: 58, maths: 72 },
+      { name: 'Mock 4', physics: 65, chemistry: 62, maths: 69 },
+      { name: 'Mock 5', physics: 62, chemistry: 58, maths: 71 },
     ]
   })
 
@@ -247,7 +248,7 @@ export default function StudentDashboard() {
             <div>
               <h3 className="text-sm font-medium text-gray-600 mb-3">Score Trend</h3>
               <div className="bg-gray-50 rounded-lg p-4">
-                <ScoreTrendChart data={data.score_history} />
+                <ScoreTrendChart data={data.score_trend_data} />
               </div>
             </div>
           </div>
@@ -391,24 +392,46 @@ function WellnessMetric({ label, value, max, type, color }) {
 }
 
 function ScoreTrendChart({ data }) {
-  const maxScore = Math.max(...data.map(d => d.score))
-  const minScore = Math.min(...data.map(d => d.score))
-  const range = maxScore - minScore || 1
-
   return (
-    <div className="flex items-end justify-between h-32 gap-2">
-      {data.map((point, index) => {
-        const height = ((point.score - minScore) / range) * 80 + 20
-        return (
-          <div key={index} className="flex-1 flex flex-col items-center gap-2">
-            <div
-              className="w-full bg-[#6B5CE7] rounded-t transition-all hover:bg-[#5A4BD1]"
-              style={{ height: `${height}%` }}
-            />
-            <span className="text-xs text-gray-500">{point.test}</span>
-          </div>
-        )
-      })}
-    </div>
+    <ResponsiveContainer width="100%" height={220}>
+      <LineChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
+        <YAxis stroke="#6b7280" fontSize={12} />
+        <Tooltip 
+          contentStyle={{ 
+            backgroundColor: '#1f2937', 
+            border: 'none', 
+            borderRadius: '8px',
+            color: '#fff'
+          }}
+        />
+        <Legend />
+        <Line 
+          type="monotone" 
+          dataKey="physics" 
+          stroke="#378ADD" 
+          strokeWidth={2}
+          dot={{ fill: '#378ADD', strokeWidth: 2, r: 4 }}
+          name="Physics"
+        />
+        <Line 
+          type="monotone" 
+          dataKey="chemistry" 
+          stroke="#D85A30" 
+          strokeWidth={2}
+          dot={{ fill: '#D85A30', strokeWidth: 2, r: 4 }}
+          name="Chemistry"
+        />
+        <Line 
+          type="monotone" 
+          dataKey="maths" 
+          stroke="#3B6D11" 
+          strokeWidth={2}
+          dot={{ fill: '#3B6D11', strokeWidth: 2, r: 4 }}
+          name="Maths"
+        />
+      </LineChart>
+    </ResponsiveContainer>
   )
 }
