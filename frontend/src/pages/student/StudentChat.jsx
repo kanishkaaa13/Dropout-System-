@@ -11,6 +11,7 @@ export default function StudentChat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [usingFallback, setUsingFallback] = useState(false)
+  const [ollamaStatus, setOllamaStatus] = useState('unknown') // 'unknown', 'online', 'offline'
   const [threads, setThreads] = useState([
     { id: 1, title: 'Physics Strategy', lastMessage: '2 hours ago' },
     { id: 2, title: 'Managing Anxiety', lastMessage: 'Yesterday' },
@@ -26,6 +27,29 @@ export default function StudentChat() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Check Ollama status on mount
+  useEffect(() => {
+    const checkOllamaStatus = async () => {
+      try {
+        const response = await api.get('/api/v1/chat/status')
+        console.log('Ollama status check:', response.data)
+        if (response.data.ollama_available) {
+          setOllamaStatus('online')
+          setUsingFallback(false)
+        } else {
+          setOllamaStatus('offline')
+          setUsingFallback(true)
+        }
+      } catch (err) {
+        console.error('Ollama status check failed:', err)
+        setOllamaStatus('offline')
+        setUsingFallback(true)
+      }
+    }
+
+    checkOllamaStatus()
+  }, [])
 
   const quickActions = [
     'How do I optimize my Chemistry score?',
@@ -48,13 +72,16 @@ export default function StudentChat() {
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setLoading(true)
-    setUsingFallback(false)
 
     try {
-      const response = await api.post('/chat', {
+      console.log('Sending message to backend:', content)
+      const response = await api.post('/api/v1/chat', {
         message: content,
-        thread_id: activeThread
+        thread_id: activeThread,
+        role: 'student'
       })
+      
+      console.log('Backend response:', response.data)
       
       const assistantMessage = {
         id: Date.now() + 1,
@@ -64,9 +91,32 @@ export default function StudentChat() {
       }
       
       setMessages(prev => [...prev, assistantMessage])
+      
+      // Update connection state based on response status
+      // Only set to offline if backend explicitly reports offline status
+      if (response.data.status === 'offline') {
+        console.log('Backend reported offline mode')
+        setOllamaStatus('offline')
+        setUsingFallback(true)
+      } else if (response.data.status === 'online') {
+        console.log('Backend reported online mode, model:', response.data.model_used)
+        setOllamaStatus('online')
+        setUsingFallback(false)
+      }
     } catch (err) {
-      console.warn('Chat API unavailable, using offline responses:', err.message)
-      setUsingFallback(true)
+      console.error('Chat API Error Details:', err)
+      console.error('Error response:', err.response)
+      console.error('Error message:', err.message)
+      
+      // Only set to offline if it's a network error or 5xx server error
+      if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK' || 
+          (err.response && err.response.status >= 500)) {
+        console.log('Network error detected, setting offline mode')
+        setOllamaStatus('offline')
+        setUsingFallback(true)
+      } else {
+        console.log('Non-network error, keeping current status')
+      }
       
       // Run offline fallback response
       const fallbackResponse = getOfflineResponse(content)
@@ -390,10 +440,20 @@ export default function StudentChat() {
                 </p>
               </div>
             </div>
-            {usingFallback && (
+            {ollamaStatus === 'offline' || usingFallback ? (
               <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
                 <AlertCircle className="w-3 h-3" />
                 Offline Mode
+              </div>
+            ) : ollamaStatus === 'online' ? (
+              <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                AI Online (Ollama)
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></span>
+                Checking...
               </div>
             )}
           </div>

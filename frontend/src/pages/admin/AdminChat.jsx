@@ -11,6 +11,7 @@ export default function AdminChat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [usingFallback, setUsingFallback] = useState(false)
+  const [ollamaStatus, setOllamaStatus] = useState('unknown') // 'unknown', 'online', 'offline'
   const [threads, setThreads] = useState([
     { id: 1, title: 'System Diagnostics', lastMessage: '30 mins ago' },
     { id: 2, title: 'Anomaly Reports', lastMessage: '2 hours ago' },
@@ -26,6 +27,29 @@ export default function AdminChat() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Check Ollama status on mount
+  useEffect(() => {
+    const checkOllamaStatus = async () => {
+      try {
+        const response = await api.get('/api/v1/chat/status')
+        console.log('Ollama status check:', response.data)
+        if (response.data.ollama_available) {
+          setOllamaStatus('online')
+          setUsingFallback(false)
+        } else {
+          setOllamaStatus('offline')
+          setUsingFallback(true)
+        }
+      } catch (err) {
+        console.error('Ollama status check failed:', err)
+        setOllamaStatus('offline')
+        setUsingFallback(true)
+      }
+    }
+
+    checkOllamaStatus()
+  }, [])
 
   const quickActions = [
     'Export system anomaly reports for at-risk metrics',
@@ -51,9 +75,10 @@ export default function AdminChat() {
     setUsingFallback(false)
 
     try {
-      const response = await api.post('/chat', {
+      const response = await api.post('/api/v1/chat', {
         message: content,
-        thread_id: activeThread
+        thread_id: activeThread,
+        role: 'admin'
       })
       
       const assistantMessage = {
@@ -64,6 +89,11 @@ export default function AdminChat() {
       }
       
       setMessages(prev => [...prev, assistantMessage])
+      
+      // Update connection state based on response
+      if (response.data.status === 'offline') {
+        setUsingFallback(true)
+      }
     } catch (err) {
       console.warn('Chat API unavailable, using offline responses:', err.message)
       setUsingFallback(true)
@@ -390,10 +420,15 @@ export default function AdminChat() {
                 </p>
               </div>
             </div>
-            {usingFallback && (
+            {usingFallback ? (
               <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
                 <AlertCircle className="w-3 h-3" />
                 Offline Mode
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                AI Online (Ollama)
               </div>
             )}
           </div>
