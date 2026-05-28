@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Book, Flask, Infinity, Star, Flag, Plus, Check, Calendar, Clock, Target } from 'lucide-react'
+import { Book, Beaker, Infinity, Star, Flag, Plus, Check, Calendar, Clock, Target } from 'lucide-react'
 
 export default function CreativePlanner() {
   const [activeTab, setActiveTab] = useState('day')
@@ -37,7 +37,7 @@ export default function CreativePlanner() {
   const getSubjectIcon = (subject) => {
     switch (subject) {
       case 'physics': return <Book className="w-4 h-4" />
-      case 'chemistry': return <Flask className="w-4 h-4" />
+      case 'chemistry': return <Beaker className="w-4 h-4" />
       case 'math': return <Infinity className="w-4 h-4" />
       default: return <Target className="w-4 h-4" />
     }
