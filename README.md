@@ -27,16 +27,22 @@ The **JEE Dropout Prediction System** helps coaching institutes like Allen, Aaka
 
 ## ✨ Key Features
 
-- 🤖 **ML Ensemble** — XGBoost + Random Forest + Logistic Regression voting ensemble (AUC 0.91)
-- 🔍 **Real SHAP Explanations** — TreeExplainer-based feature impact, not hand-coded rules
+- 🤖 **ML Ensemble with 5-Fold CV** — XGBoost + Random Forest + Logistic Regression with stratified cross-validation (AUC 0.91)
+- 🔍 **SMOTE for Class Imbalance** — Synthetic Minority Over-sampling Technique for balanced training
+- 📊 **SHAP Explainability** — Summary plots and waterfall plots saved to artifacts/ for model interpretability
 - 📊 **0–100 Risk Scorer** — Composite score weighing ML probability + burnout + trend + sleep
 - 🚨 **Automated Alerts** — Faculty notified instantly when a student crosses risk thresholds
 - 📄 **PDF Reports** — One-click downloadable student risk report with factor table + recommendations
 - 📈 **Excel Batch Export** — Full batch risk summary with conditional colour formatting
 - 📅 **Background Jobs** — APScheduler: weekly reassessment + daily digest emails
 - 🔐 **JWT Auth + RBAC** — Admin / Faculty role separation, faculty see only their students
-- 🐳 **Docker Ready** — One command (`make dev`) starts the full stack
-- ⚡ **CI/CD** — GitHub Actions: test → build (GHCR) → deploy (SSH)
+- � **Prediction Logging** — All predictions logged to SQLite for auditing and analytics
+- 🚀 **Async Endpoints** — FastAPI async endpoints for improved performance
+- 🎨 **Student Risk Dashboard** — Sortable table with color-coded dropout probability badges
+- 📊 **SHAP Bar Charts** — Interactive Recharts-based SHAP explanation visualizations
+- 📤 **CSV Bulk Upload** — PapaParse-powered bulk student data upload
+- 🔧 **Environment Configuration** — All paths and thresholds configurable via .env file
+- ✅ **Comprehensive Testing** — Pytest suite covering preprocessing, model output, and API endpoints
 
 ---
 
